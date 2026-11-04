@@ -1,0 +1,417 @@
+{
+  "case": "revisions_hidden",
+  "treatment": "neutral",
+  "what": "Revisions named in the deletion log, showing the API's hidden flags.",
+  "request": {
+    "action": "query",
+    "prop": "revisions",
+    "revids": "900000022|900000023|900000029|900000031|900000034|900000037|900000002|900000040|900000041|900000045|900000046|900000053|900000054|900000056|900000057|900000060|900000063|900000064|900000068|900000069",
+    "rvprop": "ids|flags|timestamp|user|userid|size|sha1|comment|parsedcomment|tags",
+    "rvslots": "main"
+  },
+  "response": {
+    "batchcomplete": true,
+    "query": {
+      "pages": [
+        {
+          "pageid": 900000036,
+          "ns": 0,
+          "title": "Example article 9",
+          "revisions": [
+            {
+              "revid": 900000002,
+              "parentid": 900000001,
+              "minor": false,
+              "userhidden": true,
+              "timestamp": "2026-11-04T14:25:53Z",
+              "size": 35746,
+              "sha1hidden": true,
+              "comment": "/* */",
+              "parsedcomment": "<span class=\"autocomment\"><a href=\"/xxxx/Xxxxxxxx_xx_Xxxxxxxxxxxxx\" title=\"Xxxxxxxx xx Xxxxxxxxxxxxx\">→<bdi dir=\"ltr\">(xxx)</bdi></a></span>",
+              "tags": [
+                "mobile edit",
+                "mobile web edit",
+                "mw-reverted"
+              ]
+            },
+            {
+              "revid": 900000037,
+              "parentid": 900000002,
+              "minor": true,
+              "user": "ExampleUser55",
+              "userid": 1048,
+              "timestamp": "2026-11-04T14:25:58Z",
+              "size": 35751,
+              "sha1": "0ea26adc24c3e8ec62aa848bed58923ad4ac3aae",
+              "commenthidden": true,
+              "tags": [
+                "mw-rollback",
+                "mw-reverted"
+              ]
+            },
+            {
+              "revid": 900000041,
+              "parentid": 900000037,
+              "minor": false,
+              "user": "~2026-00056-01",
+              "temp": true,
+              "userid": 1049,
+              "timestamp": "2026-11-04T15:57:26Z",
+              "size": 35746,
+              "sha1hidden": true,
+              "comment": "/* */",
+              "parsedcomment": "<span class=\"autocomment\"><a href=\"/xxxx/Xxxxxxxx_xx_Xxxxxxxxxxxxx\" title=\"Xxxxxxxx xx Xxxxxxxxxxxxx\">→<bdi dir=\"ltr\">(xxx)</bdi></a></span>",
+              "tags": [
+                "mobile edit",
+                "mobile web edit",
+                "visualeditor",
+                "mw-manual-revert",
+                "mw-reverted"
+              ]
+            },
+            {
+              "revid": 900000040,
+              "parentid": 900002597,
+              "minor": false,
+              "user": "~2026-00056-01",
+              "temp": true,
+              "userid": 1049,
+              "timestamp": "2026-11-04T15:59:38Z",
+              "size": 35746,
+              "sha1hidden": true,
+              "comment": "/* */",
+              "parsedcomment": "<span class=\"autocomment\"><a href=\"/xxxx/Xxxxxxxx_xx_Xxxxxxxxxxxxx\" title=\"Xxxxxxxx xx Xxxxxxxxxxxxx\">→<bdi dir=\"ltr\">(xxx)</bdi></a></span>",
+              "tags": [
+                "mobile edit",
+                "mobile web edit",
+                "visualeditor",
+                "mw-manual-revert",
+                "mw-reverted"
+              ]
+            }
+          ]
+        },
+        {
+          "pageid": 900000021,
+          "ns": 0,
+          "title": "Example article 6",
+          "revisions": [
+            {
+              "revid": 900000023,
+              "parentid": 900002598,
+              "minor": false,
+              "user": "ExampleUser57",
+              "userid": 1050,
+              "timestamp": "2026-01-24T10:59:47Z",
+              "size": 32478,
+              "sha1hidden": true,
+              "commenthidden": true,
+              "tags": [
+                "mw-undo",
+                "mw-reverted",
+                "wikieditor"
+              ]
+            },
+            {
+              "revid": 900000022,
+              "parentid": 900002599,
+              "minor": false,
+              "user": "ExampleUser57",
+              "userid": 1050,
+              "timestamp": "2026-01-24T11:00:18Z",
+              "size": 32478,
+              "sha1hidden": true,
+              "commenthidden": true,
+              "tags": [
+                "mw-undo",
+                "mw-reverted",
+                "wikieditor"
+              ]
+            }
+          ]
+        },
+        {
+          "pageid": 900000033,
+          "ns": 0,
+          "title": "Example article 8",
+          "revisions": [
+            {
+              "revid": 900000034,
+              "parentid": 900002600,
+              "minor": false,
+              "user": "~2026-00058-01",
+              "temp": true,
+              "userid": 1051,
+              "timestamp": "2026-10-25T03:17:19Z",
+              "size": 48879,
+              "sha1hidden": true,
+              "commenthidden": true,
+              "tags": [
+                "visualeditor",
+                "mw-reverted"
+              ]
+            }
+          ]
+        },
+        {
+          "pageid": 900000028,
+          "ns": 0,
+          "title": "Example article 7",
+          "revisions": [
+            {
+              "revid": 900000029,
+              "parentid": 900002601,
+              "minor": false,
+              "user": "~2026-00059-01",
+              "temp": true,
+              "userid": 1052,
+              "timestamp": "2026-10-25T03:06:08Z",
+              "size": 65706,
+              "sha1hidden": true,
+              "commenthidden": true,
+              "tags": [
+                "visualeditor",
+                "mw-reverted"
+              ]
+            },
+            {
+              "revid": 900000031,
+              "parentid": 900002602,
+              "minor": false,
+              "user": "~2026-00058-01",
+              "temp": true,
+              "userid": 1051,
+              "timestamp": "2026-10-25T03:16:17Z",
+              "size": 66151,
+              "sha1hidden": true,
+              "commenthidden": true,
+              "tags": [
+                "mw-reverted",
+                "wikieditor"
+              ]
+            }
+          ]
+        },
+        {
+          "pageid": 900000059,
+          "ns": 0,
+          "title": "Example article 11",
+          "revisions": [
+            {
+              "revid": 900000060,
+              "parentid": 900002603,
+              "minor": true,
+              "user": "ExampleUser60",
+              "userid": 1053,
+              "timestamp": "2026-11-04T14:33:44Z",
+              "size": 18621,
+              "sha1hidden": true,
+              "comment": "",
+              "parsedcomment": "",
+              "tags": [
+                "visualeditor",
+                "mw-reverted",
+                "editcheck-references",
+                "editcheck-newreference",
+                "editcheck-newcontent",
+                "editcheck-tone",
+                "editcheck-references-shown"
+              ]
+            }
+          ]
+        },
+        {
+          "pageid": 900000067,
+          "ns": 0,
+          "title": "Example article 13",
+          "revisions": [
+            {
+              "revid": 900000069,
+              "parentid": 900000070,
+              "minor": false,
+              "user": "ExampleUser61",
+              "userid": 1054,
+              "timestamp": "2026-11-04T09:30:09Z",
+              "size": 19998,
+              "sha1hidden": true,
+              "comment": "/* Xxxxxxxxxxxx */",
+              "parsedcomment": "<span class=\"autocomment\"><a href=\"/xxxx/Xxxxxxxxxxxx_xxxxxxxxxxx#Xxxxxxxxxxxx\" title=\"Xxxxxxxxxxxx xxxxxxxxxxx\">→<bdi dir=\"ltr\">Xxxxxxxxxxxx</bdi></a></span>",
+              "tags": [
+                "visualeditor",
+                "editcheck-newreference"
+              ]
+            },
+            {
+              "revid": 900000068,
+              "parentid": 900000069,
+              "minor": false,
+              "user": "ExampleUser61",
+              "userid": 1054,
+              "timestamp": "2026-11-04T09:30:50Z",
+              "size": 20018,
+              "sha1hidden": true,
+              "comment": "/* Xxxx xxxxxxxxx */",
+              "parsedcomment": "<span class=\"autocomment\"><a href=\"/xxxx/Xxxxxxxxxxxx_xxxxxxxxxxx#Xxxx_xxxxxxxxx\" title=\"Xxxxxxxxxxxx xxxxxxxxxxx\">→<bdi dir=\"ltr\">Xxxx xxxxxxxxx</bdi></a></span>",
+              "tags": [
+                "visualeditor"
+              ]
+            }
+          ]
+        },
+        {
+          "pageid": 900000044,
+          "ns": 0,
+          "title": "Example article 10",
+          "revisions": [
+            {
+              "revid": 900000046,
+              "parentid": 900000047,
+              "minor": false,
+              "user": "~2026-00062-01",
+              "temp": true,
+              "userid": 1055,
+              "timestamp": "2026-11-04T14:10:04Z",
+              "size": 77712,
+              "sha1hidden": true,
+              "comment": "/* Xxxxxxxx xxxx */",
+              "parsedcomment": "<span class=\"autocomment\"><a href=\"/xxxx/Xxxxx_Xxxxxx#Xxxxxxxx_xxxx\" title=\"Xxxxx Xxxxxx\">→<bdi dir=\"ltr\">Xxxxxxxx xxxx</bdi></a></span>",
+              "tags": [
+                "mobile edit",
+                "mobile web edit",
+                "possible unreferenced addition to BLP",
+                "mw-reverted"
+              ]
+            },
+            {
+              "revid": 900000045,
+              "parentid": 900002604,
+              "minor": false,
+              "user": "~2026-00062-01",
+              "temp": true,
+              "userid": 1055,
+              "timestamp": "2026-11-04T14:11:15Z",
+              "size": 77672,
+              "sha1hidden": true,
+              "comment": "/* */",
+              "parsedcomment": "<span class=\"autocomment\"><a href=\"/xxxx/Xxxxx_Xxxxxx\" title=\"Xxxxx Xxxxxx\">→<bdi dir=\"ltr\">(xxx)</bdi></a></span>",
+              "tags": [
+                "mobile edit",
+                "mobile web edit",
+                "mw-manual-revert",
+                "mw-reverted"
+              ]
+            },
+            {
+              "revid": 900000057,
+              "parentid": 900002605,
+              "minor": false,
+              "userhidden": true,
+              "timestamp": "2026-11-04T14:20:29Z",
+              "size": 77672,
+              "sha1hidden": true,
+              "comment": "/* */",
+              "parsedcomment": "<span class=\"autocomment\"><a href=\"/xxxx/Xxxxx_Xxxxxx\" title=\"Xxxxx Xxxxxx\">→<bdi dir=\"ltr\">(xxx)</bdi></a></span>",
+              "tags": [
+                "mobile edit",
+                "mobile web edit",
+                "mw-reverted"
+              ]
+            },
+            {
+              "revid": 900000054,
+              "parentid": 900000057,
+              "minor": true,
+              "user": "ExampleUser63",
+              "userid": 1056,
+              "timestamp": "2026-11-04T14:21:14Z",
+              "size": 77646,
+              "sha1": "359bf5481447267d78fcb75a84238dfd1a8ee58f",
+              "commenthidden": true,
+              "tags": [
+                "mw-undo",
+                "twinkle",
+                "mw-reverted"
+              ]
+            },
+            {
+              "revid": 900000056,
+              "parentid": 900000054,
+              "minor": false,
+              "userhidden": true,
+              "timestamp": "2026-11-04T14:25:16Z",
+              "size": 77672,
+              "sha1hidden": true,
+              "comment": "/* */",
+              "parsedcomment": "<span class=\"autocomment\"><a href=\"/xxxx/Xxxxx_Xxxxxx\" title=\"Xxxxx Xxxxxx\">→<bdi dir=\"ltr\">(xxx)</bdi></a></span>",
+              "tags": [
+                "mobile edit",
+                "mobile web edit",
+                "mw-manual-revert",
+                "mw-reverted"
+              ]
+            },
+            {
+              "revid": 900000053,
+              "parentid": 900000056,
+              "minor": true,
+              "user": "ExampleUser63",
+              "userid": 1056,
+              "timestamp": "2026-11-04T14:25:50Z",
+              "size": 77646,
+              "sha1": "359bf5481447267d78fcb75a84238dfd1a8ee58f",
+              "commenthidden": true,
+              "tags": [
+                "mw-undo",
+                "twinkle"
+              ]
+            }
+          ]
+        },
+        {
+          "pageid": 900000062,
+          "ns": 0,
+          "title": "Example article 12",
+          "revisions": [
+            {
+              "revid": 900000064,
+              "parentid": 900000065,
+              "minor": false,
+              "user": "192.0.2.65",
+              "anon": true,
+              "userid": 0,
+              "timestamp": "2024-07-23T19:50:15Z",
+              "size": 2607,
+              "sha1hidden": true,
+              "comment": "",
+              "parsedcomment": "",
+              "tags": [
+                "mobile edit",
+                "mobile web edit",
+                "mw-reverted"
+              ]
+            },
+            {
+              "revid": 900000063,
+              "parentid": 900002606,
+              "minor": false,
+              "user": "~2026-00065-01",
+              "temp": true,
+              "userid": 1057,
+              "timestamp": "2026-09-17T11:17:58Z",
+              "size": 4031,
+              "sha1hidden": true,
+              "comment": "/* */",
+              "parsedcomment": "<span class=\"autocomment\"><a href=\"/xxxx/Xxxxxx_Xxxxxx_Xxxxxx\" title=\"Xxxxxx Xxxxxx Xxxxxx\">→<bdi dir=\"ltr\">(xxx)</bdi></a></span>",
+              "tags": [
+                "mobile edit",
+                "mobile web edit",
+                "visualeditor",
+                "mw-reverted"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

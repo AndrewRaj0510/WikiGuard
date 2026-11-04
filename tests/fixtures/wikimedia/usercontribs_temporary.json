@@ -1,0 +1,34 @@
+{
+  "case": "usercontribs_temporary",
+  "treatment": "neutral",
+  "what": "Contributions by a temporary account before an edit, for point-in-time counts.",
+  "request": {
+    "action": "query",
+    "list": "usercontribs",
+    "ucuser": "~2026-00038-01",
+    "ucstart": "2026-11-02T18:29:37Z",
+    "ucdir": "older",
+    "uclimit": "10",
+    "ucprop": "ids|timestamp|tags"
+  },
+  "response": {
+    "batchcomplete": true,
+    "query": {
+      "usercontribs": [
+        {
+          "userid": 1036,
+          "user": "~2026-00038-01",
+          "pageid": 900002543,
+          "revid": 900002544,
+          "parentid": 900002545,
+          "timestamp": "2026-11-02T18:29:37Z",
+          "tags": [
+            "mobile edit",
+            "mobile web edit",
+            "visualeditor"
+          ]
+        }
+      ]
+    }
+  }
+}

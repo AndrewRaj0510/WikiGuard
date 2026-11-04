@@ -1,0 +1,22 @@
+{
+  "case": "revisions_nonexistent",
+  "treatment": "neutral",
+  "what": "A revision id that was never used.",
+  "request": {
+    "action": "query",
+    "prop": "revisions",
+    "revids": "900000003",
+    "rvprop": "ids|flags|timestamp|user|userid|size|sha1|comment|parsedcomment|tags"
+  },
+  "response": {
+    "batchcomplete": true,
+    "query": {
+      "badrevids": {
+        "900000003": {
+          "revid": 900000003,
+          "missing": true
+        }
+      }
+    }
+  }
+}

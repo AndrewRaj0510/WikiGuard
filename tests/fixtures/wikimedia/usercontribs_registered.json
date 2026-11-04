@@ -1,0 +1,156 @@
+{
+  "case": "usercontribs_registered",
+  "treatment": "neutral",
+  "what": "Contributions by a registered account before an edit, for point-in-time counts.",
+  "request": {
+    "action": "query",
+    "list": "usercontribs",
+    "ucuser": "ExampleUser15",
+    "ucstart": "2026-11-02T18:29:37Z",
+    "ucdir": "older",
+    "uclimit": "10",
+    "ucprop": "ids|timestamp|tags"
+  },
+  "response": {
+    "batchcomplete": true,
+    "continue": {
+      "uccontinue": "00000000000000|0000000000",
+      "continue": "-||"
+    },
+    "query": {
+      "usercontribs": [
+        {
+          "userid": 1014,
+          "user": "ExampleUser15",
+          "pageid": 900000016,
+          "revid": 900000015,
+          "parentid": 900000014,
+          "timestamp": "2026-11-02T18:29:37Z",
+          "tags": [
+            "mobile edit",
+            "mobile web edit",
+            "advanced mobile edit"
+          ]
+        },
+        {
+          "userid": 1014,
+          "user": "ExampleUser15",
+          "pageid": 900002616,
+          "revid": 900002617,
+          "parentid": 900002618,
+          "timestamp": "2026-11-02T18:23:06Z",
+          "tags": [
+            "mobile edit",
+            "mobile web edit",
+            "advanced mobile edit"
+          ]
+        },
+        {
+          "userid": 1014,
+          "user": "ExampleUser15",
+          "pageid": 900002616,
+          "revid": 900002618,
+          "parentid": 900002619,
+          "timestamp": "2026-11-02T18:22:51Z",
+          "tags": [
+            "mobile edit",
+            "mobile web edit",
+            "advanced mobile edit"
+          ]
+        },
+        {
+          "userid": 1014,
+          "user": "ExampleUser15",
+          "pageid": 900002616,
+          "revid": 900002619,
+          "parentid": 900002620,
+          "timestamp": "2026-11-02T18:21:49Z",
+          "tags": [
+            "mobile edit",
+            "mobile web edit",
+            "advanced mobile edit"
+          ]
+        },
+        {
+          "userid": 1014,
+          "user": "ExampleUser15",
+          "pageid": 900002616,
+          "revid": 900002620,
+          "parentid": 900002621,
+          "timestamp": "2026-11-02T18:21:25Z",
+          "tags": [
+            "mobile edit",
+            "mobile web edit",
+            "advanced mobile edit",
+            "disambiguator-link-added"
+          ]
+        },
+        {
+          "userid": 1014,
+          "user": "ExampleUser15",
+          "pageid": 900002616,
+          "revid": 900002621,
+          "parentid": 900002622,
+          "timestamp": "2026-11-02T18:20:42Z",
+          "tags": [
+            "mobile edit",
+            "mobile web edit",
+            "advanced mobile edit"
+          ]
+        },
+        {
+          "userid": 1014,
+          "user": "ExampleUser15",
+          "pageid": 900002623,
+          "revid": 900002624,
+          "parentid": 900002625,
+          "timestamp": "2026-11-02T18:20:03Z",
+          "tags": [
+            "mobile edit",
+            "mobile web edit",
+            "advanced mobile edit"
+          ]
+        },
+        {
+          "userid": 1014,
+          "user": "ExampleUser15",
+          "pageid": 900002623,
+          "revid": 900002625,
+          "parentid": 900002626,
+          "timestamp": "2026-11-02T18:19:46Z",
+          "tags": [
+            "mobile edit",
+            "mobile web edit",
+            "advanced mobile edit"
+          ]
+        },
+        {
+          "userid": 1014,
+          "user": "ExampleUser15",
+          "pageid": 900002623,
+          "revid": 900002626,
+          "parentid": 900002627,
+          "timestamp": "2026-11-02T18:19:32Z",
+          "tags": [
+            "mobile edit",
+            "mobile web edit",
+            "advanced mobile edit"
+          ]
+        },
+        {
+          "userid": 1014,
+          "user": "ExampleUser15",
+          "pageid": 900002616,
+          "revid": 900002622,
+          "parentid": 900002628,
+          "timestamp": "2026-11-02T18:19:07Z",
+          "tags": [
+            "mobile edit",
+            "mobile web edit",
+            "advanced mobile edit"
+          ]
+        }
+      ]
+    }
+  }
+}

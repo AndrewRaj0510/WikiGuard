@@ -2,7 +2,7 @@
 
 A live Wikipedia vandalism detector, designed as a production-style MLOps system that runs entirely on free services.
 
-> **Status: setup (Phase 0).** Local tooling and development services work, but the pipeline and models don't exist yet, so there are no results to show. This README is updated as the project is built.
+> **Status: Phase 1 nearly finished.** The data pipeline runs locally: live edits go through Redpanda to a parquet archive, with labels, purging, and retention. The 100k backfill is still running. There's no scoring, API, or UI yet, and no model results to show. This README is updated as the project is built.
 
 ## What it will do
 
@@ -46,7 +46,7 @@ Model results will appear in [docs/metrics.md](docs/metrics.md) once measured.
 
 ## Stack
 
-Everything runs on free tiers, and the total cost must stay $0. When a free limit is reached, the app degrades rather than billing. Limits are confirmed on signup, and some choices are still open.
+Everything runs on free tiers except OpenAI API credits for the Explain feature. When a limit is reached, the app degrades rather than billing. Limits are confirmed on signup, and some choices are still open.
 
 | Purpose | Service |
 |---|---|
@@ -60,7 +60,7 @@ Everything runs on free tiers, and the total cost must stay $0. When a free limi
 | GPU training | Colab or Kaggle (free) |
 | Monitoring | Prometheus, Grafana, and Evidently (self-hosted) |
 | CI/CD | GitHub Actions and Argo CD |
-| LLM | Groq free tier, with Gemini free tier as backup |
+| LLM | OpenAI API on prepaid credits, with Gemini free tier as backup |
 | Edge protection | Cloudflare Worker (free) |
 | Admin access | Tailscale (free) |
 | Errors and alerts | Sentry, Discord, UptimeRobot, and Healthchecks.io (free tiers) |
@@ -82,8 +82,8 @@ Nothing to show yet. Charts, matrices, and app and Grafana screenshots will appe
 
 | Phase | Goal | Status |
 |---|---|---|
-| 0 | Setup | In progress |
-| 1 | Data foundation | Not started |
+| 0 | Setup | Done |
+| 1 | Data foundation | In progress |
 | 2 | Train and evaluate five models | Not started |
 | 3 | Serving, API, and Explain | Not started |
 | 4 | Frontend | Not started |
@@ -123,8 +123,24 @@ Copy-Item .env.example .env   # then set POSTGRES_PASSWORD in .env
 docker compose up -d --wait
 ```
 
-Setup steps will be added here when there's something to run. The accounts and tools the project needs are listed at the start of Part 2 in [PLAN.md](docs/PLAN.md).
+Tests that need Postgres or Redpanda skip themselves unless pointed at a throwaway copy. Use `127.0.0.1` on Windows, because `localhost` can hang on IPv6:
+
+```powershell
+$env:TEST_DATABASE_URL = "postgresql://wikiguard:YOUR_PASSWORD@127.0.0.1:5433/wikiguard"  # its tables get wiped
+$env:TEST_KAFKA_BOOTSTRAP = "127.0.0.1:19092"
+.venv\Scripts\python -m pytest
+```
+
+Build the dataset, which can stop and resume safely. `WIKIMEDIA_USER_AGENT` and `USER_HASH_KEY` must be set in `.env`:
+
+```powershell
+.venv\Scripts\python scripts\backfill.py --target 2000 --out data\backfill_pilot   # about 15 minutes
+.venv\Scripts\python scripts\backfill.py                                           # about 10 hours
+.venv\Scripts\python scripts\check_backfill.py data\backfill
+```
+
+More setup steps will be added as the project grows. The accounts and tools the project needs are listed at the start of Part 2 in [PLAN.md](docs/PLAN.md).
 
 ## Data and attribution
 
-WikiGuard will use public data from Wikimedia. Wikipedia content is available under [CC BY-SA](https://creativecommons.org/licenses/by-sa/4.0/). WikiGuard is an independent project and isn't affiliated with the Wikimedia Foundation.
+WikiGuard will use public data from Wikimedia. Wikipedia content is available under [CC BY-SA](https://creativecommons.org/licenses/by-sa/4.0/). WikiGuard is an independent project and isn't affiliated with the Wikimedia Foundation. Test fixtures in [tests/fixtures/wikimedia/](tests/fixtures/wikimedia/README.md) are scrubbed recordings, and that folder's README covers what was changed and the attribution for kept text.

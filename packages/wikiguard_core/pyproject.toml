@@ -7,7 +7,14 @@ name = "wikiguard-core"
 version = "0.1.0"
 description = "Shared code for WikiGuard services and jobs"
 requires-python = ">=3.11,<3.12"
-dependencies = ["pydantic-settings>=2.16,<3"]
+dependencies = ["httpx>=0.28,<1", "pydantic-settings>=2.16,<3"]
+
+# Each service installs only what it uses, so serving images stay small and free of PyTorch.
+[project.optional-dependencies]
+kafka = ["confluent-kafka>=2.16,<3"]
+archive = ["pyarrow>=26,<27"]
+db = ["psycopg[binary]>=3.3,<4"]
+ops = ["prometheus-client>=0.26,<1"]
 
 [tool.setuptools.packages.find]
 include = ["wikiguard_core*"]

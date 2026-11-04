@@ -94,7 +94,7 @@ class GateSettings(BaseConfig):
 class LlmSettings(BaseConfig):
     llm_model: str
     llm_backup_model: str
-    groq_api_key: SecretStr
+    openai_api_key: SecretStr
     gemini_api_key: SecretStr
     explain_daily_call_cap: int = Field(gt=0)
 
@@ -110,6 +110,13 @@ class RetrainSettings(BaseConfig):
         if value not in {1, 7, 14}:
             raise ValueError("must be 1, 7, or 14")
         return value
+
+
+class WorkerSettings(BaseConfig):
+    # Workers serve /health and /metrics on this port.
+    ops_port: int = Field(default=8000, gt=0)
+    # Where the ingestor keeps its stream position. A mounted volume in the cluster.
+    ingest_state_path: str = "data/ingestor_state.json"
 
 
 class ArchiveSettings(BaseConfig):

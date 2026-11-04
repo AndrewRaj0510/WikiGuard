@@ -1,0 +1,114 @@
+[
+  {
+    "case": "compare_added_only",
+    "file": "compare_added_only.json",
+    "treatment": "ordinary",
+    "source": "https://en.wikipedia.org/w/index.php?diff=1383439226"
+  },
+  {
+    "case": "compare_hidden",
+    "file": "compare_hidden.json",
+    "treatment": "neutral"
+  },
+  {
+    "case": "compare_moved_paragraph",
+    "file": "compare_moved_paragraph.json",
+    "treatment": "ordinary",
+    "source": "https://en.wikipedia.org/w/index.php?diff=1383440658"
+  },
+  {
+    "case": "compare_multi_section",
+    "file": "compare_multi_section.json",
+    "treatment": "ordinary",
+    "source": "https://en.wikipedia.org/w/index.php?diff=1383442231"
+  },
+  {
+    "case": "compare_nonexistent",
+    "file": "compare_nonexistent.json",
+    "treatment": "neutral"
+  },
+  {
+    "case": "compare_removed_only",
+    "file": "compare_removed_only.json",
+    "treatment": "neutral",
+    "why_neutral": "the removed text is unverified claims about a living person"
+  },
+  {
+    "case": "compare_revert_action",
+    "file": "compare_revert_action.json",
+    "treatment": "neutral"
+  },
+  {
+    "case": "compare_reverted",
+    "file": "compare_reverted.json",
+    "treatment": "neutral"
+  },
+  {
+    "case": "compare_small_changed",
+    "file": "compare_small_changed.json",
+    "treatment": "neutral",
+    "why_neutral": "the text lists a living person's spouses and children"
+  },
+  {
+    "case": "compare_unicode",
+    "file": "compare_unicode.json",
+    "treatment": "ordinary",
+    "source": "https://en.wikipedia.org/w/index.php?diff=1383442774"
+  },
+  {
+    "case": "compare_wikitext_markup",
+    "file": "compare_wikitext_markup.json",
+    "treatment": "neutral",
+    "why_neutral": "the text names academy players who may be minors"
+  },
+  {
+    "case": "logevents_revision_delete",
+    "file": "logevents_revision_delete.json",
+    "treatment": "neutral"
+  },
+  {
+    "case": "recentchanges_sample",
+    "file": "recentchanges_sample.json",
+    "treatment": "neutral"
+  },
+  {
+    "case": "revisions_hidden",
+    "file": "revisions_hidden.json",
+    "treatment": "neutral"
+  },
+  {
+    "case": "revisions_nonexistent",
+    "file": "revisions_nonexistent.json",
+    "treatment": "neutral"
+  },
+  {
+    "case": "revisions_tag_batch",
+    "file": "revisions_tag_batch.json",
+    "treatment": "neutral"
+  },
+  {
+    "case": "stream",
+    "file": "stream_events.jsonl",
+    "treatment": "neutral"
+  },
+  {
+    "case": "usercontribs_registered",
+    "file": "usercontribs_registered.json",
+    "treatment": "neutral"
+  },
+  {
+    "case": "usercontribs_temporary",
+    "file": "usercontribs_temporary.json",
+    "treatment": "neutral"
+  },
+  {
+    "case": "users_registered",
+    "file": "users_registered.json",
+    "treatment": "neutral"
+  },
+  {
+    "case": "users_temporary",
+    "file": "users_temporary.json",
+    "treatment": "neutral"
+  }
+]

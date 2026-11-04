@@ -46,7 +46,7 @@ def clean_environment(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_missing_required_values_are_all_named() -> None:
     with pytest.raises(ConfigError) as error:
         load_settings(LlmSettings, env_file=None)
-    for name in ("LLM_MODEL", "GROQ_API_KEY", "GEMINI_API_KEY", "EXPLAIN_DAILY_CALL_CAP"):
+    for name in ("LLM_MODEL", "OPENAI_API_KEY", "GEMINI_API_KEY", "EXPLAIN_DAILY_CALL_CAP"):
         assert name in str(error.value)
 
 

@@ -1,0 +1,31 @@
+{
+  "case": "users_registered",
+  "treatment": "neutral",
+  "what": "list=users for a registered account.",
+  "request": {
+    "action": "query",
+    "list": "users",
+    "ususers": "ExampleUser15",
+    "usprop": "editcount|registration|groups"
+  },
+  "response": {
+    "batchcomplete": true,
+    "query": {
+      "users": [
+        {
+          "userid": 1014,
+          "name": "ExampleUser15",
+          "editcount": 183497,
+          "registration": "2014-01-31T18:22:27Z",
+          "groups": [
+            "autoreviewer",
+            "extendedconfirmed",
+            "*",
+            "user",
+            "autoconfirmed"
+          ]
+        }
+      ]
+    }
+  }
+}

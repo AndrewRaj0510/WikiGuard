@@ -1,0 +1,19 @@
+{
+  "case": "compare_nonexistent",
+  "treatment": "neutral",
+  "what": "Asking for the diff of a revision id that was never used.",
+  "request": {
+    "action": "compare",
+    "fromrev": "900000003",
+    "torev": "900000004",
+    "prop": "diff|diffsize|ids|title|user|comment|parsedcomment|size|timestamp"
+  },
+  "response": {
+    "error": {
+      "code": "nosuchrevid",
+      "info": "There is no revision with ID 900000003.",
+      "docref": "See https://en.wikipedia.org/w/api.php for API usage. Subscribe to the mediawiki-api-announce mailing list at &lt;https://lists.wikimedia.org/postorius/lists/mediawiki-api-announce.lists.wikimedia.org/&gt; for notice of API deprecations and breaking changes."
+    },
+    "servedby": "mw-api-ext.eqiad.main-5f95b76fd7-c7ntf"
+  }
+}

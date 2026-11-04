@@ -1,0 +1,28 @@
+{
+  "case": "users_temporary",
+  "treatment": "neutral",
+  "what": "list=users for a temporary account.",
+  "request": {
+    "action": "query",
+    "list": "users",
+    "ususers": "~2026-00038-01",
+    "usprop": "editcount|registration|groups"
+  },
+  "response": {
+    "batchcomplete": true,
+    "query": {
+      "users": [
+        {
+          "userid": 1036,
+          "name": "~2026-00038-01",
+          "editcount": 1,
+          "registration": "2026-11-02T18:29:36Z",
+          "groups": [
+            "*",
+            "temp"
+          ]
+        }
+      ]
+    }
+  }
+}

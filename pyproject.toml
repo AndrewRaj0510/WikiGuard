@@ -8,7 +8,10 @@ select = ["E", "F", "I", "UP", "B", "S"]
 
 [tool.ruff.lint.per-file-ignores]
 # assert is how pytest checks results, and test values aren't real secrets.
-"**/tests/**" = ["S101", "S105", "S106"]
+"**/tests/**" = ["S101", "S105", "S106", "S608"]
+# Identifiers here come from constants in the migration itself, never from input.
+"jobs/migrate/migrations/**" = ["S608"]
+"jobs/conftest.py" = ["S101", "S608"]
 
 [tool.mypy]
 python_version = "3.11"
@@ -16,6 +19,22 @@ strict = true
 # Lets mypy understand pydantic models, including settings filled from the environment.
 plugins = ["pydantic.mypy"]
 
+# pyarrow ships no type information.
+[[tool.mypy.overrides]]
+module = ["pyarrow", "pyarrow.*"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 addopts = "--import-mode=importlib"
-testpaths = ["packages", "services", "jobs"]
+testpaths = ["packages", "services", "jobs", "tests"]
+# Repo tools in scripts/ aren't an installed package, but their logic still gets tested.
+pythonpath = [
+    "scripts",
+    "services/ingestor",
+    "services/archiver",
+    "jobs/labeler",
+    "jobs/purge",
+    "jobs/retention",
+    "jobs",
+]
+markers = ["integration: needs real Postgres or Redpanda, and skips itself when they are not set"]

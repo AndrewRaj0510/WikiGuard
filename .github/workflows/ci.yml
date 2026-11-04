@@ -33,6 +33,33 @@ jobs:
       - run: pip install -r requirements-dev.txt
       - run: pytest
 
+  # Migrations, roles, RLS on every table, and the jobs, on real Postgres.
+  integration:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:17.11-alpine
+        env:
+          POSTGRES_USER: wikiguard
+          POSTGRES_PASSWORD: ci-only-not-a-secret
+          POSTGRES_DB: wikiguard
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U wikiguard"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgresql://wikiguard:ci-only-not-a-secret@127.0.0.1:5433/wikiguard
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements-dev.txt
+      - run: pytest -m integration
+
   gitleaks:
     runs-on: ubuntu-24.04
     env:

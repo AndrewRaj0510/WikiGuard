@@ -1,0 +1,180 @@
+{
+  "case": "revisions_tag_batch",
+  "treatment": "neutral",
+  "what": "The labeler's batched tag lookup, mixing reverted and unreverted edits.",
+  "request": {
+    "action": "query",
+    "prop": "revisions",
+    "revids": "900002561|900000012|900002566|900002607|900002608|900000015|900002544|900002536|900002540|900002609",
+    "rvprop": "ids|tags|timestamp"
+  },
+  "response": {
+    "batchcomplete": true,
+    "query": {
+      "pages": [
+        {
+          "pageid": 900000013,
+          "ns": 0,
+          "title": "Example article 3",
+          "revisions": [
+            {
+              "revid": 900000012,
+              "parentid": 900000011,
+              "timestamp": "2026-11-02T18:29:07Z",
+              "tags": [
+                "visualeditor",
+                "mw-reverted"
+              ]
+            }
+          ]
+        },
+        {
+          "pageid": 900002539,
+          "ns": 0,
+          "title": "Example article 51",
+          "revisions": [
+            {
+              "revid": 900002540,
+              "parentid": 900002541,
+              "timestamp": "2026-11-02T18:29:35Z",
+              "tags": [
+                "wikieditor"
+              ]
+            }
+          ]
+        },
+        {
+          "pageid": 900002565,
+          "ns": 0,
+          "title": "Example article 57",
+          "revisions": [
+            {
+              "revid": 900002566,
+              "parentid": 900002567,
+              "timestamp": "2026-11-02T18:29:05Z",
+              "tags": [
+                "mobile edit",
+                "mobile app edit",
+                "android app edit",
+                "mw-reverted",
+                "app-section-source"
+              ]
+            }
+          ]
+        },
+        {
+          "pageid": 900002610,
+          "ns": 0,
+          "title": "Example article 63",
+          "revisions": [
+            {
+              "revid": 900002608,
+              "parentid": 900002611,
+              "timestamp": "2026-11-02T18:28:43Z",
+              "tags": [
+                "visualeditor",
+                "mw-reverted"
+              ]
+            }
+          ]
+        },
+        {
+          "pageid": 900000016,
+          "ns": 0,
+          "title": "Example article 4",
+          "revisions": [
+            {
+              "revid": 900000015,
+              "parentid": 900000014,
+              "timestamp": "2026-11-02T18:29:37Z",
+              "tags": [
+                "mobile edit",
+                "mobile web edit",
+                "advanced mobile edit"
+              ]
+            }
+          ]
+        },
+        {
+          "pageid": 900002612,
+          "ns": 0,
+          "title": "Example article 64",
+          "revisions": [
+            {
+              "revid": 900002607,
+              "parentid": 900002613,
+              "timestamp": "2026-11-02T18:29:01Z",
+              "tags": [
+                "mw-reverted",
+                "wikieditor"
+              ]
+            }
+          ]
+        },
+        {
+          "pageid": 900002535,
+          "ns": 0,
+          "title": "Example article 50",
+          "revisions": [
+            {
+              "revid": 900002536,
+              "parentid": 900002537,
+              "timestamp": "2026-11-02T18:29:37Z",
+              "tags": [
+                "twinkle"
+              ]
+            }
+          ]
+        },
+        {
+          "pageid": 900002614,
+          "ns": 0,
+          "title": "Example article 65",
+          "revisions": [
+            {
+              "revid": 900002609,
+              "parentid": 900002615,
+              "timestamp": "2026-11-02T18:29:34Z",
+              "tags": [
+                "wikieditor"
+              ]
+            }
+          ]
+        },
+        {
+          "pageid": 900002560,
+          "ns": 0,
+          "title": "Example article 56",
+          "revisions": [
+            {
+              "revid": 900002561,
+              "parentid": 900002562,
+              "timestamp": "2026-11-02T18:29:08Z",
+              "tags": [
+                "visualeditor",
+                "mw-reverted"
+              ]
+            }
+          ]
+        },
+        {
+          "pageid": 900002543,
+          "ns": 0,
+          "title": "Example article 52",
+          "revisions": [
+            {
+              "revid": 900002544,
+              "parentid": 900002545,
+              "timestamp": "2026-11-02T18:29:37Z",
+              "tags": [
+                "mobile edit",
+                "mobile web edit",
+                "visualeditor"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

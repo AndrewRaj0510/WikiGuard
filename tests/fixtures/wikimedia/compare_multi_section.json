@@ -1,0 +1,37 @@
+{
+  "case": "compare_multi_section",
+  "treatment": "ordinary",
+  "what": "A settled, unflagged edit. Shows: multi_section.",
+  "request": {
+    "action": "compare",
+    "fromrev": "1379924712",
+    "torev": "1383442231",
+    "prop": "diff|diffsize|ids|title|user|comment|parsedcomment|size|timestamp"
+  },
+  "response": {
+    "compare": {
+      "fromid": 71107136,
+      "fromrevid": 1379924712,
+      "fromns": 0,
+      "fromtitle": "Capitão Wagner",
+      "fromsize": 16601,
+      "fromtimestamp": "2026-10-12T18:32:12Z",
+      "fromuser": "ExampleUser4",
+      "fromuserid": 1004,
+      "fromcomment": "",
+      "fromparsedcomment": "",
+      "toid": 71107136,
+      "torevid": 1383442231,
+      "tons": 0,
+      "totitle": "Capitão Wagner",
+      "tosize": 16601,
+      "totimestamp": "2026-11-02T18:28:48Z",
+      "touser": "ExampleUser4",
+      "touserid": 1004,
+      "tocomment": "/* Electoral history */",
+      "toparsedcomment": "<span class=\"autocomment\"><a href=\"/wiki/Capit%C3%A3o_Wagner#Electoral_history\" title=\"Capitão Wagner\">→<bdi dir=\"ltr\">Electoral history</bdi></a></span>",
+      "diffsize": 4316,
+      "body": "<tr>\n  <td colspan=\"2\" class=\"diff-lineno\">Line 110:</td>\n  <td colspan=\"2\" class=\"diff-lineno\">Line 110:</td>\n</tr>\n<tr>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-deleted\"><div>| 588,451</div></td>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-added\"><div>| 588,451</div></td>\n</tr>\n<tr>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-deleted\"><div>| 46.43%</div></td>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-added\"><div>| 46.43%</div></td>\n</tr>\n<tr>\n  <td class=\"diff-marker\" data-marker=\"−\"></td>\n  <td class=\"diff-deletedline diff-side-deleted\"><div>| {{no2|Lost}}&lt;br&gt;&lt;small&gt;''<del class=\"diffchange diffchange-inline\">2º</del> Round''&lt;/small&gt;</div></td>\n  <td class=\"diff-marker\" data-marker=\"+\"></td>\n  <td class=\"diff-addedline diff-side-added\"><div>| {{no2|Lost}}&lt;br&gt;&lt;small&gt;''<ins class=\"diffchange diffchange-inline\">2nd</ins> Round''&lt;/small&gt;</div></td>\n</tr>\n<tr>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-deleted\"><div>| &lt;ref name=\":5\" /&gt;</div></td>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-added\"><div>| &lt;ref name=\":5\" /&gt;</div></td>\n</tr>\n<tr>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-deleted\"><div>|-</div></td>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-added\"><div>|-</div></td>\n</tr>\n<tr>\n  <td colspan=\"2\" class=\"diff-lineno\">Line 130:</td>\n  <td colspan=\"2\" class=\"diff-lineno\">Line 130:</td>\n</tr>\n<tr>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-deleted\"><div>| 624,892</div></td>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-added\"><div>| 624,892</div></td>\n</tr>\n<tr>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-deleted\"><div>| 48.31%</div></td>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-added\"><div>| 48.31%</div></td>\n</tr>\n<tr>\n  <td class=\"diff-marker\" data-marker=\"−\"></td>\n  <td class=\"diff-deletedline diff-side-deleted\"><div>| {{no2|Lost}}&lt;br&gt;&lt;small&gt;''<del class=\"diffchange diffchange-inline\">2º</del> Round''&lt;/small&gt;</div></td>\n  <td class=\"diff-marker\" data-marker=\"+\"></td>\n  <td class=\"diff-addedline diff-side-added\"><div>| {{no2|Lost}}&lt;br&gt;&lt;small&gt;''<ins class=\"diffchange diffchange-inline\">2nd</ins> Round''&lt;/small&gt;</div></td>\n</tr>\n<tr>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-deleted\"><div>| &lt;ref name=\":7\" /&gt;</div></td>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-added\"><div>| &lt;ref name=\":7\" /&gt;</div></td>\n</tr>\n<tr>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-deleted\"><div>|-</div></td>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-added\"><div>|-</div></td>\n</tr>\n<tr>\n  <td colspan=\"2\" class=\"diff-lineno\">Line 151:</td>\n  <td colspan=\"2\" class=\"diff-lineno\">Line 151:</td>\n</tr>\n<tr>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-deleted\"><div>| 159,426</div></td>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-added\"><div>| 159,426</div></td>\n</tr>\n<tr>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-deleted\"><div>| 11.40%</div></td>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-added\"><div>| 11.40%</div></td>\n</tr>\n<tr>\n  <td class=\"diff-marker\" data-marker=\"−\"></td>\n  <td class=\"diff-deletedline diff-side-deleted\"><div>| {{no2|Lost}}&lt;br&gt;&lt;small&gt;''<del class=\"diffchange diffchange-inline\">1º</del> Round''&lt;/small&gt;</div></td>\n  <td class=\"diff-marker\" data-marker=\"+\"></td>\n  <td class=\"diff-addedline diff-side-added\"><div>| {{no2|Lost}}&lt;br&gt;&lt;small&gt;''<ins class=\"diffchange diffchange-inline\">1st</ins> Round''&lt;/small&gt;</div></td>\n</tr>\n<tr>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-deleted\"><div>| </div></td>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-added\"><div>| </div></td>\n</tr>\n<tr>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-deleted\"><div>|-</div></td>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-added\"><div>|-</div></td>\n</tr>\n"
+    }
+  }
+}

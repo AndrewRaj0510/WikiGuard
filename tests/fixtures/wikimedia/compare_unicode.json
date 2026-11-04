@@ -1,0 +1,37 @@
+{
+  "case": "compare_unicode",
+  "treatment": "ordinary",
+  "what": "A settled, unflagged edit. Shows: unicode.",
+  "request": {
+    "action": "compare",
+    "fromrev": "1378649594",
+    "torev": "1383442774",
+    "prop": "diff|diffsize|ids|title|user|comment|parsedcomment|size|timestamp"
+  },
+  "response": {
+    "compare": {
+      "fromid": 788253,
+      "fromrevid": 1378649594,
+      "fromns": 0,
+      "fromtitle": "Yarsanism",
+      "fromsize": 32631,
+      "fromtimestamp": "2026-10-05T13:01:29Z",
+      "fromuser": "ExampleUser5",
+      "fromuserid": 1005,
+      "fromcomment": "",
+      "fromparsedcomment": "",
+      "toid": 788253,
+      "torevid": 1383442774,
+      "tons": 0,
+      "totitle": "Yarsanism",
+      "tosize": 33136,
+      "totimestamp": "2026-11-02T18:33:29Z",
+      "touser": "ExampleUser6",
+      "touserid": 1006,
+      "tocomment": "/* Geography */",
+      "toparsedcomment": "<span class=\"autocomment\"><a href=\"/wiki/Yarsanism#Geography\" title=\"Yarsanism\">→<bdi dir=\"ltr\">Geography</bdi></a></span>",
+      "diffsize": 5099,
+      "body": "<tr>\n  <td colspan=\"2\" class=\"diff-lineno\">Line 50:</td>\n  <td colspan=\"2\" class=\"diff-lineno\">Line 50:</td>\n</tr>\n<tr>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-deleted\"><div>The main urban centers of the religion are [[Sahneh]], [[Kerend-e Gharb]], and [[Gahvareh]], and other important cities include [[Kermanshah]], [[Sarpol-e Zahab]] and [[Qasr-e Shirin]].{{sfnp|Hamzeh'ee|1990|p=39}}</div></td>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-added\"><div>The main urban centers of the religion are [[Sahneh]], [[Kerend-e Gharb]], and [[Gahvareh]], and other important cities include [[Kermanshah]], [[Sarpol-e Zahab]] and [[Qasr-e Shirin]].{{sfnp|Hamzeh'ee|1990|p=39}}</div></td>\n</tr>\n<tr>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-deleted\"><br /></td>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-added\"><br /></td>\n</tr>\n<tr>\n  <td class=\"diff-marker\" data-marker=\"−\"></td>\n  <td class=\"diff-deletedline diff-side-deleted\"><div>Other areas in Iran with a significant Yarsan population include [[Hashtgerd]] and [[Varamin]], near [[Tehran]], and [[Maragheh]] and [[Tabriz]] in [[Azerbaijan (Iran)|Iranian Azerbaijan]],{{sfnp|Hamzeh'ee|1990|p=39}} where important Turkic-speaking Yarsan communities live and use [[Turkic languages|Turkic]] for many of their religious texts. The Yarsani tradition claims that all early communities used [[Gorani language|Gorani]] as their religious language, but that over time, some groups were forced to adopt a Turkic language closely akin to [[Azerbaijani language|Azeri]] for all purposes, including religion.{{sfnp|Kreyenbroek|Kanakis|2020|pp=32–33}}</div></td>\n  <td class=\"diff-marker\" data-marker=\"+\"></td>\n  <td class=\"diff-addedline diff-side-added\"><div><ins class=\"diffchange diffchange-inline\">Yarsani adherents in Lorestan province included the Lak tribes of Nurali, Chavari, Mirbeg, Tarhan, and part of the Owlad Qobad in the counties of Delfan and [[Kuhdasht County|Kuhdasht]].&lt;ref&gt;سجادی، علی. \"تحلیل بازتاب رفتارهای آئینی اهل ‌حق در میراث مادی بر اساس کاوش‌های باستان‌شناسی، مطالعات اسنادی و باستان /مردم‌‌شناسی\"، نامه انسان‌شناسی، 18، 32، 1400، pp. 187.&lt;/ref&gt; </ins>Other areas in Iran with a significant Yarsan population include [[Hashtgerd]] and [[Varamin]], near [[Tehran]], and [[Maragheh]] and [[Tabriz]] in [[Azerbaijan (Iran)|Iranian Azerbaijan]],{{sfnp|Hamzeh'ee|1990|p=39}} where important Turkic-speaking Yarsan communities live and use [[Turkic languages|Turkic]] for many of their religious texts. The Yarsani tradition claims that all early communities used [[Gorani language|Gorani]] as their religious language, but that over time, some groups were forced to adopt a Turkic language closely akin to [[Azerbaijani language|Azeri]] for all purposes, including religion.{{sfnp|Kreyenbroek|Kanakis|2020|pp=32–33}}</div></td>\n</tr>\n<tr>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-deleted\"><br /></td>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-added\"><br /></td>\n</tr>\n<tr>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-deleted\"><div>In Iraq, Yarsan followers mainly live in [[Mosul]], [[Kirkuk]], [[Kalar, Iraq|Kalar]], [[Khanaqin]], [[Erbil]], [[Sulaymaniyah]], and [[Halabja]].{{sfnp|Hamzeh'ee|1990|p=39}}&lt;ref&gt;{{Cite web |title=Kaka'is - The men with big moustaches ‌|website=Pukmedia |url=https://www.pukmedia.com/EN/Details/71230 |url-status=live |archive-url=https://web.archive.org/web/20221104081419/https://www.pukmedia.com/EN/Details/71230 |archive-date=2022-11-04 |access-date=2022-04-18}}&lt;/ref&gt;&lt;ref&gt;{{Cite web |date=2017 |title=Kaka'i in Iraq |website=Minority Rights Group |url=https://minorityrights.org/communities/kakai/ }}&lt;/ref&gt;&lt;ref&gt;{{Cite web |date=Apr 23, 2021 |title=Iraq's Kaka'i minority aspires to be represented in political process |website=North Press Agency |url=https://npasyria.com/en/58142/ }}&lt;/ref&gt;</div></td>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-added\"><div>In Iraq, Yarsan followers mainly live in [[Mosul]], [[Kirkuk]], [[Kalar, Iraq|Kalar]], [[Khanaqin]], [[Erbil]], [[Sulaymaniyah]], and [[Halabja]].{{sfnp|Hamzeh'ee|1990|p=39}}&lt;ref&gt;{{Cite web |title=Kaka'is - The men with big moustaches ‌|website=Pukmedia |url=https://www.pukmedia.com/EN/Details/71230 |url-status=live |archive-url=https://web.archive.org/web/20221104081419/https://www.pukmedia.com/EN/Details/71230 |archive-date=2022-11-04 |access-date=2022-04-18}}&lt;/ref&gt;&lt;ref&gt;{{Cite web |date=2017 |title=Kaka'i in Iraq |website=Minority Rights Group |url=https://minorityrights.org/communities/kakai/ }}&lt;/ref&gt;&lt;ref&gt;{{Cite web |date=Apr 23, 2021 |title=Iraq's Kaka'i minority aspires to be represented in political process |website=North Press Agency |url=https://npasyria.com/en/58142/ }}&lt;/ref&gt;</div></td>\n</tr>\n"
+    }
+  }
+}

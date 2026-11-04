@@ -1,0 +1,37 @@
+{
+  "case": "compare_reverted",
+  "treatment": "neutral",
+  "what": "A reverted edit by a temporary account. Words replaced, structure kept.",
+  "request": {
+    "action": "compare",
+    "fromrev": "900000011",
+    "torev": "900000012",
+    "prop": "diff|diffsize|ids|title|user|comment|parsedcomment|size|timestamp"
+  },
+  "response": {
+    "compare": {
+      "fromid": 900000013,
+      "fromrevid": 900000011,
+      "fromns": 0,
+      "fromtitle": "Example article 3",
+      "fromsize": 36336,
+      "fromtimestamp": "2026-10-11T19:45:57Z",
+      "fromuser": "ExampleUser12",
+      "fromuserid": 1011,
+      "fromcomment": "Xxxxxxxxxxx xxxxxxxxxx",
+      "fromparsedcomment": "Xxxxxxxxxxx xxxxxxxxxx",
+      "toid": 900000013,
+      "torevid": 900000012,
+      "tons": 0,
+      "totitle": "Example article 3",
+      "tosize": 36333,
+      "totimestamp": "2026-11-02T18:29:07Z",
+      "touser": "~2026-00013-01",
+      "touserid": 1012,
+      "tocomment": "",
+      "toparsedcomment": "",
+      "diffsize": 3629,
+      "body": "<tr>\n  <td colspan=\"2\" class=\"diff-lineno\">Line 15:</td>\n  <td colspan=\"2\" class=\"diff-lineno\">Line 15:</td>\n</tr>\n<tr>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-deleted\"><br /></td>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-added\"><br /></td>\n</tr>\n<tr>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-deleted\"><div>==Xxxxxxxxx==</div></td>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-added\"><div>==Xxxxxxxxx==</div></td>\n</tr>\n<tr>\n  <td class=\"diff-marker\" data-marker=\"−\"></td>\n  <td class=\"diff-deletedline diff-side-deleted\"><div>Xxx xxxxxx xxx<del class=\"diffchange diffchange-inline\"> xx xxx</del> Xxxxxxx xxxx ''<del class=\"diffchange diffchange-inline\">xxxxxx</del>'' xxx xxx xxxx xxxx xxx xxxxx xxx xxx-00xx xxxxxxx, xxxxxx [[Xxxxx xxxxxx|Xxxxx xxxxx]].&lt;xxx xxxx=XX&gt;{{xxxx xxxx|xxxx=Xxxxxxxxx|xxxxx=Xxxx|xxxxx=Xxxxx xxx Xxxxxxx xx xxx Xxxxxxx Xxxxx|xxxx=0000|xxxxxxxxx=Xxxxxx Xxxxxxxxxx|xxxxxxxx=Xxxxxx|xxxx=0-0000-0000-0|xxxxx=00–00}}&lt;/xxx&gt; Xxxx xxxxxx xxxx xxxxxxx xxxx xxx xxxxx xxxx ''xxxxxxx'', xx ''xxxxxxx'', xxxxxxxxxx xxxx Xxxxxx xxxxxxx 'xxxxxxxxxxx' xx '[[xxxxxxxx]]'. Xxxxx xxxxxxx xxxxx xxxxxxxx ''xxx'', ''xxxxxx'', ''xxxxxxx'', xxx ''xxxxxxx''. Xxxxx xxxxx xxxxxxxxx xxxxxxxxxxxx xxx xxxxxxxx xx xxxxx xxxxxx xxx xxxxxxxxxxxx xxx xxx xxx xxxxxx xxxx xxxxxxxxxxxx xx xxxxx xxxx xx xxxxxxx xxxxxxxxxx xxx xxxxx xxxxxxxxx.&lt;xxx xxxx=XX/&gt;&lt;xxx&gt;{{xxxx xxxx|xxxx=Xxxxxxxx|xxxxx=Xxxx|xxxxxx-xxxx=Xxxx Xxxxxxxx|xxxxx=Xxx Xxxx: Xxx Xxxxxx &amp; Xxxxxxxx Xxxxxxx|xxxx=0000|xxxxxxxxx=Xxxxx &amp; Xxxxx|xxxxxxxx=Xxxxxx|xxxxx=000–000}}&lt;/xxx&gt;&lt;xxx&gt;{{xxxx xxx|xxxxx=Xxxxxx|xxx=xxxx://xxx.xxxxxxxxxx.xxx/xxxxx.xxx?xxxxxxx_xx_xxxxx=0&amp;xxxxxx=xxxxxx&amp;xxxxxxxxxx=xxxx|xxxx=Xxxxxx Xxxxxxxxx Xxxxxxxxxx|xxxxxx-xxxx=00 Xxxxxxx 0000}}&lt;/xxx&gt;</div></td>\n  <td class=\"diff-marker\" data-marker=\"+\"></td>\n  <td class=\"diff-addedline diff-side-added\"><div>Xxx xxxxxx xxx Xxxxxxx xxxx ''<ins class=\"diffchange diffchange-inline\">xx Xxxxxxx</ins>'' xxx xxx xxxx xxxx xxx xxxxx xxx xxx-00xx xxxxxxx, xxxxxx [[Xxxxx xxxxxx|Xxxxx xxxxx]].&lt;xxx xxxx=XX&gt;{{xxxx xxxx|xxxx=Xxxxxxxxx|xxxxx=Xxxx|xxxxx=Xxxxx xxx Xxxxxxx xx xxx Xxxxxxx Xxxxx|xxxx=0000|xxxxxxxxx=Xxxxxx Xxxxxxxxxx|xxxxxxxx=Xxxxxx|xxxx=0-0000-0000-0|xxxxx=00–00}}&lt;/xxx&gt; Xxxx xxxxxx xxxx xxxxxxx xxxx xxx xxxxx xxxx ''xxxxxxx'', xx ''xxxxxxx'', xxxxxxxxxx xxxx Xxxxxx xxxxxxx 'xxxxxxxxxxx' xx '[[xxxxxxxx]]'. Xxxxx xxxxxxx xxxxx xxxxxxxx ''xxx'', ''xxxxxx'', ''xxxxxxx'', xxx ''xxxxxxx''. Xxxxx xxxxx xxxxxxxxx xxxxxxxxxxxx xxx xxxxxxxx xx xxxxx xxxxxx xxx xxxxxxxxxxxx xxx xxx xxx xxxxxx xxxx xxxxxxxxxxxx xx xxxxx xxxx xx xxxxxxx xxxxxxxxxx xxx xxxxx xxxxxxxxx.&lt;xxx xxxx=XX/&gt;&lt;xxx&gt;{{xxxx xxxx|xxxx=Xxxxxxxx|xxxxx=Xxxx|xxxxxx-xxxx=Xxxx Xxxxxxxx|xxxxx=Xxx Xxxx: Xxx Xxxxxx &amp; Xxxxxxxx Xxxxxxx|xxxx=0000|xxxxxxxxx=Xxxxx &amp; Xxxxx|xxxxxxxx=Xxxxxx|xxxxx=000–000}}&lt;/xxx&gt;&lt;xxx&gt;{{xxxx xxx|xxxxx=Xxxxxx|xxx=xxxx://xxx.xxxxxxxxxx.xxx/xxxxx.xxx?xxxxxxx_xx_xxxxx=0&amp;xxxxxx=xxxxxx&amp;xxxxxxxxxx=xxxx|xxxx=Xxxxxx Xxxxxxxxx Xxxxxxxxxx|xxxxxx-xxxx=00 Xxxxxxx 0000}}&lt;/xxx&gt;</div></td>\n</tr>\n<tr>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-deleted\"><br /></td>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-added\"><br /></td>\n</tr>\n<tr>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-deleted\"><div>==Xxxxxxx==</div></td>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-added\"><div>==Xxxxxxx==</div></td>\n</tr>\n"
+    }
+  }
+}

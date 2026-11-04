@@ -1,0 +1,37 @@
+{
+  "case": "compare_small_changed",
+  "treatment": "neutral",
+  "what": "A settled, unflagged edit. Shows: small_changed.",
+  "request": {
+    "action": "compare",
+    "fromrev": "900000014",
+    "torev": "900000015",
+    "prop": "diff|diffsize|ids|title|user|comment|parsedcomment|size|timestamp"
+  },
+  "response": {
+    "compare": {
+      "fromid": 900000016,
+      "fromrevid": 900000014,
+      "fromns": 0,
+      "fromtitle": "Example article 4",
+      "fromsize": 5137,
+      "fromtimestamp": "2026-10-09T12:13:16Z",
+      "fromuser": "ExampleUser14",
+      "fromuserid": 1013,
+      "fromcomment": "/* Xxxxxxxx xxxx */ xxxxx xxxxxxxx",
+      "fromparsedcomment": "<span class=\"autocomment\"><a href=\"/xxxx/Xxxx_Xxxxxx#Xxxxxxxx_xxxx\" title=\"Xxxx Xxxxxx\">→<bdi dir=\"ltr\">Xxxxxxxx xxxx</bdi></a>: </span> xxxxx xxxxxxxx",
+      "toid": 900000016,
+      "torevid": 900000015,
+      "tons": 0,
+      "totitle": "Example article 4",
+      "tosize": 5146,
+      "totimestamp": "2026-11-02T18:29:37Z",
+      "touser": "ExampleUser15",
+      "touserid": 1014,
+      "tocomment": "/* */ xxxxx xxxxx",
+      "toparsedcomment": "<span class=\"autocomment\"><a href=\"/xxxx/Xxxx_Xxxxxx\" title=\"Xxxx Xxxxxx\">→<bdi dir=\"ltr\">(xxx)</bdi></a>: </span> xxxxx xxxxx",
+      "diffsize": 1901,
+      "body": "<tr>\n  <td colspan=\"2\" class=\"diff-lineno\">Line 9:</td>\n  <td colspan=\"2\" class=\"diff-lineno\">Line 9:</td>\n</tr>\n<tr>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-deleted\"><div>| xxxxx_xxxxx = [[Xxxxxxxx]], [[Xxxxxxxxxxxx]], Xxxxxxx</div></td>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-added\"><div>| xxxxx_xxxxx = [[Xxxxxxxx]], [[Xxxxxxxxxxxx]], Xxxxxxx</div></td>\n</tr>\n<tr>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-deleted\"><div>| xxxxxxxx    = 0</div></td>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-added\"><div>| xxxxxxxx    = 0</div></td>\n</tr>\n<tr>\n  <td class=\"diff-marker\" data-marker=\"−\"></td>\n  <td class=\"diff-deletedline diff-side-deleted\"><div>| xxxxxxxxxx  = Xxxxxxx xxxxx<del class=\"diffchange diffchange-inline\">, </del>xxxxxx</div></td>\n  <td class=\"diff-marker\" data-marker=\"+\"></td>\n  <td class=\"diff-addedline diff-side-added\"><div>| xxxxxxxxxx  = <ins class=\"diffchange diffchange-inline\">{{xxxxx|</ins>Xxxxxxx xxxxx<ins class=\"diffchange diffchange-inline\">|</ins>xxxxxx<ins class=\"diffchange diffchange-inline\">}}</ins></div></td>\n</tr>\n<tr>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-deleted\"><div>| xxxxxx      = {{xxxxxxxx|Xxxxx Xxxxxxxx|xxx=xxx}}&lt;xx /&gt;{{xxxxxxxx|[[Xxxx Xxxxxxx]]|0000|0000|xxx=xxx}}&lt;xx /&gt;{{xxxxxxxx|Xxxxxxx Xxxxxxxx|0000}}</div></td>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-added\"><div>| xxxxxx      = {{xxxxxxxx|Xxxxx Xxxxxxxx|xxx=xxx}}&lt;xx /&gt;{{xxxxxxxx|[[Xxxx Xxxxxxx]]|0000|0000|xxx=xxx}}&lt;xx /&gt;{{xxxxxxxx|Xxxxxxx Xxxxxxxx|0000}}</div></td>\n</tr>\n<tr>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-deleted\"><div>| xxxxx_xxxx  = </div></td>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-added\"><div>| xxxxx_xxxx  = </div></td>\n</tr>\n"
+    }
+  }
+}

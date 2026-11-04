@@ -1,0 +1,37 @@
+{
+  "case": "compare_removed_only",
+  "treatment": "neutral",
+  "what": "A settled, unflagged edit. Shows: removed_only, unicode, wikitext_markup.",
+  "request": {
+    "action": "compare",
+    "fromrev": "900000005",
+    "torev": "900000006",
+    "prop": "diff|diffsize|ids|title|user|comment|parsedcomment|size|timestamp"
+  },
+  "response": {
+    "compare": {
+      "fromid": 900000007,
+      "fromrevid": 900000005,
+      "fromns": 0,
+      "fromtitle": "Example article 1",
+      "fromsize": 36737,
+      "fromtimestamp": "2026-10-15T08:05:01Z",
+      "fromuser": "ExampleUser7",
+      "fromuserid": 1007,
+      "fromcomment": "Xxxxxx xxxxxxxxxxx xxxxx XXXXX xxx \"XxxxXxxxx\"",
+      "fromparsedcomment": "Xxxxxx xxxxxxxxxxx xxxxx XXXXX xxx &quot;XxxxXxxxx&quot;",
+      "toid": 900000007,
+      "torevid": 900000006,
+      "tons": 0,
+      "totitle": "Example article 1",
+      "tosize": 36275,
+      "totimestamp": "2026-11-02T18:29:23Z",
+      "touser": "~2026-00008-01",
+      "touserid": 1008,
+      "tocomment": "/* Xxxxx */ xxxxxxx xxxxxxxxxxxx xxxx xxx [[XX:XXXXXX]]",
+      "toparsedcomment": "<span class=\"autocomment\"><a href=\"/xxxx/Xxx%X0%X0_Xxxx_Xxxxxxx#Xxxxx\" title=\"Xxxx Xxxx Xxxxxxx\">→<bdi dir=\"ltr\">Xxxxx</bdi></a>: </span> xxxxxxx xxxxxxxxxxxx xxxx xxx <a href=\"/xxxx/Xxxxxxxxx:XXXXXX\" class=\"mw-redirect\" title=\"Xxxxxxxxx:XXXXXX\">XX:XXXXXX</a>",
+      "diffsize": 3556,
+      "body": "<tr>\n  <td colspan=\"2\" class=\"diff-lineno\">Line 61:</td>\n  <td colspan=\"2\" class=\"diff-lineno\">Line 61:</td>\n</tr>\n<tr>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-deleted\"><br /></td>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-added\"><br /></td>\n</tr>\n<tr>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-deleted\"><div>Xx xxxx 0000–0000, Xxxxxxx xxxxxx xxx xxxxxxxxxx XXXXX ([[:xx:Xxxxxxxxx Xxxxxxxxxx Xxxxxxxxxxxxxxx Xxxxxxxxxx|Xxxxxxxxx Xxxxxxxxxx Xxxxxxxxxxxxxxx Xxxxxxxxxx X.X.]]), xxxxx xxx x xxxxxxxx XXX (xxxxxxx xxxxxxxxxxx xxxxxxxxxx) xxxxxxx. Xxx Xxxxxxx Xxxxxxx xx Xxxxxxxxx (xxxxx Xxxxx Xxxxxxx’x XXXX xxxxxxxxxx) xxxxxxx xx xx 00 Xxx 0000 xxxxx x xxxxxx xxxxxxx xxxxxxxx xx Xxxxxxx 0000 xxx xxxxxxxx xx xxxxxxxxx XXX0. XXXXX xxxx Xxxxxxxx’x xxx. Xxx xxxxxxx xx xxx 00 xxxxx (xxxxxxxxx). Xxx xxxxxxx xx xxxxxxxxx xx xxxxxx xxxxxx 0 Xxxxxxxx 0000—xxxx xxxxx xxxxxx Xxxxx’x xxxxxxx xxxxxxxxx xx 00 Xxxxxxxx.&lt;xxx&gt;{{Xxxx xxx |xxxx=0000-00-00 |xxxxx=Xxxxxx x Xxxxxxx xxxxxxxxxxx xx 00% xx Xx Xxxxxxx x Xxxxxxxxx xx 00% |xxx=xxxxx://xxx.xxxxxxxxxxxx.xx/xxxxxx-x-xxxxxxx-xxxxxxxxxxx-xx-00-xx-xx-xxxxxxx-x-xxxxxxxxx-xx-00-xxx/ |xxxxxx-xxxx=0000-00-00 |xxxxxxx=Xxxxx Xxxxxxx |xxxxxxxx=xx-XX}}&lt;/xxx&gt;</div></td>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-added\"><div>Xx xxxx 0000–0000, Xxxxxxx xxxxxx xxx xxxxxxxxxx XXXXX ([[:xx:Xxxxxxxxx Xxxxxxxxxx Xxxxxxxxxxxxxxx Xxxxxxxxxx|Xxxxxxxxx Xxxxxxxxxx Xxxxxxxxxxxxxxx Xxxxxxxxxx X.X.]]), xxxxx xxx x xxxxxxxx XXX (xxxxxxx xxxxxxxxxxx xxxxxxxxxx) xxxxxxx. Xxx Xxxxxxx Xxxxxxx xx Xxxxxxxxx (xxxxx Xxxxx Xxxxxxx’x XXXX xxxxxxxxxx) xxxxxxx xx xx 00 Xxx 0000 xxxxx x xxxxxx xxxxxxx xxxxxxxx xx Xxxxxxx 0000 xxx xxxxxxxx xx xxxxxxxxx XXX0. XXXXX xxxx Xxxxxxxx’x xxx. Xxx xxxxxxx xx xxx 00 xxxxx (xxxxxxxxx). Xxx xxxxxxx xx xxxxxxxxx xx xxxxxx xxxxxx 0 Xxxxxxxx 0000—xxxx xxxxx xxxxxx Xxxxx’x xxxxxxx xxxxxxxxx xx 00 Xxxxxxxx.&lt;xxx&gt;{{Xxxx xxx |xxxx=0000-00-00 |xxxxx=Xxxxxx x Xxxxxxx xxxxxxxxxxx xx 00% xx Xx Xxxxxxx x Xxxxxxxxx xx 00% |xxx=xxxxx://xxx.xxxxxxxxxxxx.xx/xxxxxx-x-xxxxxxx-xxxxxxxxxxx-xx-00-xx-xx-xxxxxxx-x-xxxxxxxxx-xx-00-xxx/ |xxxxxx-xxxx=0000-00-00 |xxxxxxx=Xxxxx Xxxxxxx |xxxxxxxx=xx-XX}}&lt;/xxx&gt;</div></td>\n</tr>\n<tr>\n  <td class=\"diff-marker\" data-marker=\"−\"></td>\n  <td class=\"diff-deletedline diff-side-deleted\"><br /></td>\n  <td colspan=\"2\" class=\"diff-empty diff-side-added\"></td>\n</tr>\n<tr>\n  <td class=\"diff-marker\" data-marker=\"−\"></td>\n  <td class=\"diff-deletedline diff-side-deleted\"><div>Xxx xxxxxxx xxx xxxxxxx xx xxx Xxxxxxx xxxxxxxxxxxxxx xxxxxxx xxx xxxxxx xxxxxxx xxxxxxx (xxxx xx xxx xxxxxxxx XXX xxxxxxxxx xxxx). Xxxxxxx xxxx xxxxxxx Xx Xxxxxxx “XxxxXxxxx” xx x xxxxxxxxxx-xxxxxxx xxxxxxx xxxxxxxx xx xxxxxxx xxxxxxxxxxx xx xxx-Xxxxxxx xxxxxx xxxxx xx xxxxxxxxx. Xxxxxxx’x Xxxxxxxxx xxxxxxx (xxxxxxx xxx Xxxxx, xxx xxx xxxx xxxxxxxx xx Xxxxxxx) xx xxxxxxxxxx xxxxx xx xxxxxxxx xx xxxx xxxxxxxxxx xxxxxx xxxx xxxxxxxxxxx xxxxxxxxx. </div></td>\n  <td colspan=\"2\" class=\"diff-empty diff-side-added\"></td>\n</tr>\n<tr>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-deleted\"><br /></td>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-added\"><br /></td>\n</tr>\n<tr>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-deleted\"><div>====Xxxxxxxx====</div></td>\n  <td class=\"diff-marker\"></td>\n  <td class=\"diff-context diff-side-added\"><div>====Xxxxxxxx====</div></td>\n</tr>\n"
+    }
+  }
+}

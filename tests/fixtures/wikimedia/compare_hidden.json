@@ -1,0 +1,19 @@
+{
+  "case": "compare_hidden",
+  "treatment": "neutral",
+  "what": "Asking for the diff of a hidden revision.",
+  "request": {
+    "action": "compare",
+    "fromrev": "900000001",
+    "torev": "900000002",
+    "prop": "diff|diffsize|ids|title|user|comment|parsedcomment|size|timestamp"
+  },
+  "response": {
+    "error": {
+      "code": "missingcontent",
+      "info": "Missing content for revision ID 900000002.",
+      "docref": "See https://en.wikipedia.org/w/api.php for API usage. Subscribe to the mediawiki-api-announce mailing list at &lt;https://lists.wikimedia.org/postorius/lists/mediawiki-api-announce.lists.wikimedia.org/&gt; for notice of API deprecations and breaking changes."
+    },
+    "servedby": "mw-api-ext.eqiad.main-5f95b76fd7-ss2hv"
+  }
+}
