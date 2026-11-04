@@ -218,3 +218,26 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# WikiGuard
+# Docs stay local, except images the README uses (DEC-025)
+docs/*
+!docs/images/
+docs/images/*
+!docs/images/readme/
+# Local data and model artifacts
+data/
+*.pt
+*.onnx
+mlruns/
+# Frontend
+node_modules/
+.next/
+# The Python template above ignores lib/, which would hide Next.js code
+!frontend/lib/
+# Secrets, keeping the template file
+.env.*
+!.env.example
+# Personal Claude Code settings
+.claude/settings.local.json
+CLAUDE.md

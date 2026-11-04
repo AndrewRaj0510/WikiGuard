@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wikiguard-core"
+version = "0.1.0"
+description = "Shared code for WikiGuard services and jobs"
+requires-python = ">=3.11,<3.12"
+dependencies = ["pydantic-settings>=2.16,<3"]
+
+[tool.setuptools.packages.find]
+include = ["wikiguard_core*"]
+
+[tool.setuptools.package-data]
+wikiguard_core = ["py.typed"]

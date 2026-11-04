@@ -1,0 +1,21 @@
+# Tool settings for the whole repo. Each package and service has its own dependencies.
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "S"]
+
+[tool.ruff.lint.per-file-ignores]
+# assert is how pytest checks results, and test values aren't real secrets.
+"**/tests/**" = ["S101", "S105", "S106"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+# Lets mypy understand pydantic models, including settings filled from the environment.
+plugins = ["pydantic.mypy"]
+
+[tool.pytest.ini_options]
+addopts = "--import-mode=importlib"
+testpaths = ["packages", "services", "jobs"]
