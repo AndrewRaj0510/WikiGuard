@@ -29,6 +29,8 @@ LSTM_ADDED_TOKENS = 170
 LSTM_REMOVED_TOKENS = 85
 # Standardized values are clipped, so an extreme edit can't produce an extreme input.
 METADATA_CLIP = 10.0
+# Below this a column is rounding noise: float32 inputs can't hold differences this small.
+MIN_METADATA_STD = 1e-6
 WORD = re.compile(r"\w+")
 # Punctuation is kept for the BiLSTM because vandalism is often "!!!!!" as much as words.
 TOKEN = re.compile(r"\w+|[^\w\s]")
@@ -77,7 +79,7 @@ class MetadataSpec:
         for column in values[0]:
             series = np.array([value[column] for value in values], dtype=np.float64)
             std = float(series.std())
-            if std > 0:
+            if std > MIN_METADATA_STD:
                 kept.append(column)
                 means.append(float(series.mean()))
                 stds.append(std)

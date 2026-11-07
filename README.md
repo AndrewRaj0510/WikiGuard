@@ -219,7 +219,7 @@ docker build -f jobs\trainer\Dockerfile.benchmark -t wikiguard-benchmark .
 docker run --rm --cpus=0.1 --memory=512m -v "${PWD}\data\runs:/runs" wikiguard-benchmark /runs/roberta/model --rows /runs/benchmarks/sample.json --label render-limits
 ```
 
-The golden set, `snapshots/golden-set-v1/`, is a frozen set of 200 edits that later retrains are checked against. Its labels were made by Claude and haven't yet been checked by a person. It's tracked and pushed like a snapshot.
+The golden set, `snapshots/golden-set-v1/`, is a frozen set of 200 edits that later retrains are checked against. Its labels were made by Claude and reviewed by the owner. It's tracked and pushed like a snapshot.
 
 ### Supabase
 

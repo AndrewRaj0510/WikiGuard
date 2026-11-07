@@ -149,3 +149,17 @@ def test_transformer_text_keeps_the_comment_when_the_addition_is_huge() -> None:
 
     assert text.startswith("comment: short note")
     assert len(text) < 1300
+
+
+def test_a_column_holding_only_rounding_noise_is_left_out(monkeypatch: pytest.MonkeyPatch) -> None:
+    # sin(45 degrees) and sin(135 degrees) are exactly equal on Windows and can differ slightly on
+    # Linux, so a plain "std > 0" kept this column on one platform only.
+    noisy = iter([0.7071067811865476, 0.7071067811865475])
+    monkeypatch.setattr(
+        "wikiguard_core.inputs._metadata_values",
+        lambda _row: {"noise": next(noisy), "real": 1.0 if "seen" in _row else 2.0},
+    )
+
+    spec = MetadataSpec.fit([{"seen": 1}, {}])
+
+    assert spec.columns == ("real",)
