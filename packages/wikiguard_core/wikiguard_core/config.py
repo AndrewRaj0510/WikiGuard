@@ -41,6 +41,10 @@ class CommonSettings(BaseConfig):
 
 class DatabaseSettings(BaseConfig):
     database_url: SecretStr
+
+
+class MigrationSettings(BaseConfig):
+    # Separate because this login can change the schema, so only the migration job should hold it.
     database_migrations_url: SecretStr
 
 

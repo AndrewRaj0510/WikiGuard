@@ -5,11 +5,11 @@ archive holds the last 30 days anyway, so what's removed here can still be rebui
 rollups, model versions, and the audit log are small and stay forever.
 
 Normal rules (docs/capacity.md has the measurements behind them):
-- Diff text: 48 hours, or 5 days for high-risk edits, which reviewers may still open.
-- Edits, scores, and labels: 5 days. The plan's first guess of 14 measured at 149% of the limit.
+- Diff text: 48 hours, or 3 days for high-risk edits, which reviewers may still open.
+- Edits, scores, and labels: 3 days, which is also how far back the review queue goes (DEC-038).
 
-Edits under 48 hours old are never touched, because they're still waiting for labels. Every
-level keeps at least 3 days of rows, which allows for an outage in the labeler.
+Edits under 48 hours old are never touched, because they're still waiting for labels. Normal
+rules leave a day for the labeler to catch up after an outage, and the emergency level 12 hours.
 """
 
 import logging
@@ -46,10 +46,10 @@ class Windows:
     rows: timedelta
 
 
-NORMAL = Windows("normal", timedelta(hours=48), timedelta(days=5), timedelta(days=5))
-WARNING = Windows("warning", timedelta(hours=48), timedelta(days=5), timedelta(days=5))
-SHRINK = Windows("shrink", timedelta(hours=48), timedelta(days=3), timedelta(days=4))
-EMERGENCY = Windows("emergency", timedelta(hours=48), timedelta(hours=48), timedelta(days=3))
+NORMAL = Windows("normal", timedelta(hours=48), timedelta(days=3), timedelta(days=3))
+WARNING = Windows("warning", timedelta(hours=48), timedelta(days=3), timedelta(days=3))
+SHRINK = Windows("shrink", timedelta(hours=48), timedelta(hours=48), timedelta(days=3))
+EMERGENCY = Windows("emergency", timedelta(hours=48), timedelta(hours=48), timedelta(hours=60))
 
 
 class Settings(CommonSettings, DatabaseSettings):

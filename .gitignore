@@ -153,6 +153,8 @@ activemq-data/
 .env
 .envrc
 .venv
+# Training tools have their own environment (F-049)
+.venv-train/
 env/
 venv/
 ENV/
@@ -227,6 +229,10 @@ docs/images/*
 !docs/images/readme/
 # Local data and model artifacts
 data/
+# DVC stores the snapshot folders, and git tracks each NAME.dvc pointer beside them. Not
+# snapshots/*/, because DVC reads that as ignoring snapshots/ too and then finds no pointers (F-067).
+snapshots/snapshot-*/
+snapshots/golden-set-*/
 *.pt
 *.onnx
 mlruns/

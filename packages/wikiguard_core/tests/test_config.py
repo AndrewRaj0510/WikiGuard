@@ -8,6 +8,7 @@ from wikiguard_core.config import (
     ArchiveSettings,
     BaseConfig,
     ConfigError,
+    DatabaseSettings,
     FeatureFlagSettings,
     LlmSettings,
     PrivacySettings,
@@ -102,6 +103,15 @@ def test_settings_read_from_env_file(tmp_path: Path) -> None:
     env_file = tmp_path / ".env"
     env_file.write_text("RETRAIN_INTERVAL_DAYS=14\nUNRELATED_SETTING=ignored\n")
     assert load_settings(RetrainSettings, env_file=str(env_file)).retrain_interval_days == 14
+
+
+def test_runtime_services_do_not_need_the_migration_login(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DATABASE_URL", "postgresql://runtime")
+
+    assert "database_migrations_url" not in DatabaseSettings.model_fields
+    assert load_settings(DatabaseSettings, env_file=None).database_url.get_secret_value()
 
 
 def test_example_lists_every_setting() -> None:

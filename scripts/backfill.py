@@ -315,6 +315,18 @@ def build_labels(client: WikimediaClient, out: Path) -> None:
     temporary.replace(out / "labels_48h.parquet")
 
 
+def edits_per_second(slices: list[dict[str, Any]]) -> float:
+    """The average of each hour's own rate.
+
+    Every hour gives the same number of rows, and a quiet hour takes longer to give them. Dividing
+    total rows by total time would count quiet hours for more, and came out 7% too low (F-064).
+    """
+    rates = [
+        (item["rows"] - 1) / item["span_seconds"] for item in slices if item["span_seconds"] > 0
+    ]
+    return sum(rates) / len(rates)
+
+
 def summarize(out: Path) -> dict[str, Any]:
     table = pq.read_table(
         out / "parts",
@@ -353,8 +365,7 @@ def summarize(out: Path) -> dict[str, Any]:
         for line in (out / "listing.jsonl").read_text(encoding="utf-8").splitlines()
         if '"slice_done"' in line
     ]
-    timed = [item for item in slices if item["span_seconds"] > 0]
-    rate = sum(item["rows"] - 1 for item in timed) / sum(item["span_seconds"] for item in timed)
+    rate = edits_per_second(slices)
     summary = {
         "rows": total,
         "distinct_days": len(days),

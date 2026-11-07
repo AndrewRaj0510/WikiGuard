@@ -9,6 +9,7 @@ import httpx
 import pyarrow.parquet as pq
 from backfill import (
     build_labels,
+    edits_per_second,
     fetch_diffs,
     label_for,
     list_edits,
@@ -219,6 +220,17 @@ def test_label_rule_boundary() -> None:
 
     assert label_for(usable, 48.0) == (1, None)
     assert label_for(usable, 48.01) == (0, None)
+
+
+def test_edit_rate_gives_every_hour_the_same_weight() -> None:
+    # A busy hour at 1.5 a second and a quiet one at 0.5 average 1.0. Total rows over total time
+    # would say 0.75, because the quiet hour took three times as long to give its rows.
+    slices = [
+        {"rows": 151, "span_seconds": 100.0},
+        {"rows": 151, "span_seconds": 300.0},
+        {"rows": 1, "span_seconds": 0.0},
+    ]
+    assert edits_per_second(slices) == 1.0
 
 
 def test_summary_reports_rates_exclusions_and_speed(tmp_path: Path) -> None:

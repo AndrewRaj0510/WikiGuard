@@ -1,0 +1,7 @@
+[core]
+    analytics = false
+    autostage = false
+    remote = origin
+['remote "origin"']
+    url = s3://dvc
+    endpointurl = https://dagshub.com/AndrewRaj0510/WikiGuard.s3

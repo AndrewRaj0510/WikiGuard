@@ -1,0 +1,22 @@
+# Training tools, kept out of requirements-dev.txt because MLflow's pins conflict with pre-commit's
+# (F-049). Install into their own environment:
+#   py -3.11 -m venv .venv-train
+#   .venv-train\Scripts\python -m pip install -r jobs\trainer\requirements.txt
+# The GPU build of PyTorch comes from its own index. mlflow-skinny, not mlflow, because full mlflow
+# 3.5.1 pins pyarrow below 22 (F-072), and 3.5.1 because that's what DagsHub's server reports (F-044).
+--extra-index-url https://download.pytorch.org/whl/cu126
+-e packages/wikiguard_core[archive,serve]
+-e jobs/trainer
+alembic==1.20.1
+dvc[s3]==3.67.1
+evidently==0.7.23
+matplotlib==3.11.2
+mlflow-skinny==3.5.1
+onnx==1.23.2
+pandas==2.3.3
+onnxscript==0.7.2
+pytest==9.2.0
+safetensors==0.8.0
+sqlalchemy==2.0.57
+torch==2.14.1+cu126
+transformers==5.22.1

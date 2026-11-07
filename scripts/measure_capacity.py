@@ -20,7 +20,7 @@ import pyarrow.parquet as pq
 
 LIMIT_BYTES = 500 * 1024 * 1024
 TEXT_DAYS = 2
-ROW_DAYS = 5
+ROW_DAYS = 3
 # Share of edits whose text stays as long as the row. A guess until Phase 3 has real scores.
 HIGH_RISK_SHARE = 0.05
 TABLES = ("edits", "scores", "labels")
@@ -86,16 +86,18 @@ def measure(connection: psycopg.Connection[Any], rows: list[dict[str, Any]]) -> 
     }
 
 
-def project(sizes: dict[str, Any], edits_per_day: float, parquet_per_edit: float) -> dict[str, Any]:
-    """What the retention rules add up to at the measured rate."""
+def project(
+    sizes: dict[str, Any], edits_per_day: float, parquet_per_edit: float, row_days: int = ROW_DAYS
+) -> dict[str, Any]:
+    """What a retention rule adds up to at the measured rate."""
     other = sizes["score_row_bytes"] + sizes["label_row_bytes"]
     text = sizes["edit_row_with_text_bytes"]
     bare = sizes["edit_row_without_text_bytes"]
     with_text_rows = edits_per_day * TEXT_DAYS
-    high_risk_rows = edits_per_day * (ROW_DAYS - TEXT_DAYS) * HIGH_RISK_SHARE
-    bare_rows = edits_per_day * (ROW_DAYS - TEXT_DAYS) * (1 - HIGH_RISK_SHARE)
+    high_risk_rows = edits_per_day * (row_days - TEXT_DAYS) * HIGH_RISK_SHARE
+    bare_rows = edits_per_day * (row_days - TEXT_DAYS) * (1 - HIGH_RISK_SHARE)
     steady = (with_text_rows + high_risk_rows) * text + bare_rows * bare
-    steady += edits_per_day * ROW_DAYS * other
+    steady += edits_per_day * row_days * other
     naive_days = LIMIT_BYTES / (edits_per_day * (text + other))
     return {
         "edits_per_day": round(edits_per_day),

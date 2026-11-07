@@ -43,18 +43,18 @@ def test_windows_shorten_as_the_database_fills(share: float, windows: object) ->
 def test_no_level_can_reach_edits_still_waiting_for_labels(windows: Any) -> None:
     assert windows.text >= timedelta(hours=48)
     assert windows.high_risk_text >= timedelta(hours=48)
-    assert windows.rows >= timedelta(days=3)
+    assert windows.rows >= timedelta(hours=60)
 
 
 @pytest.mark.integration
 def test_normal_rules(db: psycopg.Connection[Any]) -> None:
     add_edit(db, 1, ago(hours=47))
     add_edit(db, 2, ago(hours=49))
-    add_edit(db, 3, ago(days=4))
+    add_edit(db, 3, ago(days=2, hours=12))
     add_score(db, 3, 0.9)
-    add_edit(db, 4, ago(days=4))
+    add_edit(db, 4, ago(days=2, hours=12))
     add_score(db, 4, 0.1)
-    add_edit(db, 5, ago(days=6))
+    add_edit(db, 5, ago(days=3, hours=1))
 
     results = run(db, NOW)
 
@@ -72,9 +72,9 @@ def test_high_risk_text_also_goes_after_its_window(
 ) -> None:
     # Under normal rules the row goes at the same moment, so this needs the shrink level.
     monkeypatch.setattr("retention.windows_for", lambda *_: SHRINK)
-    add_edit(db, 1, ago(days=3, hours=1))
+    add_edit(db, 1, ago(hours=49))
     add_score(db, 1, 0.9)
-    add_edit(db, 2, ago(days=2, hours=23))
+    add_edit(db, 2, ago(hours=47))
     add_score(db, 2, 0.9)
 
     run(db, NOW)
@@ -100,13 +100,13 @@ def test_deleting_an_edit_takes_its_score_and_label(db: psycopg.Connection[Any])
 
 
 @pytest.mark.integration
-def test_a_nearly_full_database_shortens_the_windows_but_keeps_three_days(
+def test_a_nearly_full_database_shortens_the_windows_but_keeps_unlabeled_edits(
     db: psycopg.Connection[Any],
 ) -> None:
     add_edit(db, 1, ago(hours=47))
-    add_edit(db, 2, ago(days=2, hours=23))
+    add_edit(db, 2, ago(hours=59))
     add_score(db, 2, 0.9)
-    add_edit(db, 3, ago(days=4))
+    add_edit(db, 3, ago(hours=61))
 
     # A limit equal to a tiny fraction of the real size means "over the emergency level".
     results = run(db, NOW, limit=1024)
@@ -130,7 +130,7 @@ def test_each_run_is_recorded(db: psycopg.Connection[Any]) -> None:
 @pytest.mark.integration
 def test_the_maintenance_role_has_every_permission_it_needs(db: psycopg.Connection[Any]) -> None:
     add_edit(db, 1, ago(days=6))
-    add_edit(db, 2, ago(days=3))
+    add_edit(db, 2, ago(days=2))
     db.execute("SET ROLE wikiguard_maintenance")
     try:
         results = run(db, NOW)

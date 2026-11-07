@@ -12,11 +12,14 @@ import logging
 import re
 
 TEMPORARY_ACCOUNT = re.compile(r"~\d{4}-\d{1,12}-\d{1,12}")
-# Bounded repeats, so a crafted edit can't make these slow (section 8 of the plan).
-IPV4_IN_TEXT = re.compile(r"(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?![\d.])")
-IPV6_IN_TEXT = re.compile(
-    r"(?<![\w:])(?:[0-9A-Fa-f]{1,4}:){2,7}(?::?[0-9A-Fa-f]{1,4}){1,7}(?![\w:])"
-)
+# Bounded repeats, so a crafted edit can't make these slow (section 8 of the plan). A dot after
+# an address only rules it out when a digit follows, since "at 8.8.8.8." ends in one (F-066).
+IPV4_IN_TEXT = re.compile(r"(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?!\d|\.\d)")
+# A run of hex digits and colons is only a candidate. ipaddress decides, because a pattern alone
+# can't tell an address from a time like 12:34:56 (F-066).
+IPV6_CANDIDATE = re.compile(r"(?<![0-9A-Fa-f:])[0-9A-Fa-f:]{6,64}(?![0-9A-Fa-f:])")
+# Below this, too much ordinary text parses as an address, and C++'s "d::c" is one example.
+MIN_IPV6_COLONS = 3
 REDACTED_ACCOUNT = "[temporary account]"
 REDACTED_IP = "[ip address]"
 
@@ -44,11 +47,36 @@ def hash_user(name: str, key: str) -> str:
     return hmac.new(key.encode(), normalized.encode(), hashlib.sha256).hexdigest()
 
 
+def _is_ipv6(text: str) -> bool:
+    try:
+        ipaddress.IPv6Address(text)
+    except ValueError:
+        return False
+    return True
+
+
+def _redact_ipv6(match: re.Match[str]) -> str:
+    run = match.group()
+    if run.count(":") < MIN_IPV6_COLONS:
+        return run
+    # Comments write "User talk:2001:...: reverted", so a colon can touch either end.
+    lead = ":" if run.startswith(":") and not run.startswith("::") else ""
+    trail = ":" if run.endswith(":") and not run.endswith("::") else ""
+    core = run[len(lead) : len(run) - len(trail)]
+    if _is_ipv6(core):
+        return f"{lead}{REDACTED_IP}{trail}"
+    # A word made only of hex letters can touch it too, as in "Added:2001:...".
+    word, _, rest = core.partition(":")
+    if _is_ipv6(rest):
+        return f"{lead}{word}:{REDACTED_IP}{trail}"
+    return run
+
+
 def redact_identifiers(text: str) -> str:
     """Remove temporary account names and IP addresses, keeping everything else."""
     text = TEMPORARY_ACCOUNT.sub(REDACTED_ACCOUNT, text)
     text = IPV4_IN_TEXT.sub(REDACTED_IP, text)
-    return IPV6_IN_TEXT.sub(REDACTED_IP, text)
+    return IPV6_CANDIDATE.sub(_redact_ipv6, text)
 
 
 class RedactingFilter(logging.Filter):

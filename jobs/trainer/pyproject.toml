@@ -1,0 +1,12 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wikiguard-trainer"
+version = "0.1.0"
+description = "Training pipeline for WikiGuard's five models"
+requires-python = ">=3.11,<3.12"
+
+[tool.setuptools]
+packages = ["trainer"]

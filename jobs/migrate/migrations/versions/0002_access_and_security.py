@@ -1,8 +1,8 @@
 """Reviews, the single-seat gate, usage counters, audit log, indexes, roles, and RLS.
 
 Roles get only what they need, so a leaked credential can do limited damage. They are created
-here without passwords and can't log in. In each environment the owner creates a login for each
-role by hand, so no password ever passes through this repo:
+here without passwords and can't log in. In each Supabase project the owner creates a login for
+each role by hand, so no password ever passes through this repo. README.md has the steps:
 
     CREATE ROLE api_login LOGIN PASSWORD '...' IN ROLE wikiguard_api;
 
@@ -196,6 +196,10 @@ def upgrade() -> None:
         )
         op.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")
 
+    # Alembic's own table is in public too. No policy means only its owner, the migrator, sees it.
+    op.execute("REVOKE ALL ON alembic_version FROM PUBLIC")
+    op.execute("ALTER TABLE alembic_version ENABLE ROW LEVEL SECURITY")
+
     for role, grants in GRANTS.items():
         tables_for_role: set[str] = set()
         for privilege, tables in grants.items():
@@ -215,6 +219,7 @@ def downgrade() -> None:
         for table in sorted(tables_for_role):
             op.execute(f"DROP POLICY {role}_access ON {table}")
             op.execute(f"REVOKE ALL ON {table} FROM {role}")
+    op.execute("ALTER TABLE alembic_version DISABLE ROW LEVEL SECURITY")
     for table in TABLES:
         op.execute(f"ALTER TABLE {table} DISABLE ROW LEVEL SECURITY")
     op.execute(

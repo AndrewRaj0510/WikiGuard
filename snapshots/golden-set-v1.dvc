@@ -1,0 +1,6 @@
+outs:
+- md5: 0276cb49047ca978ec9a50cca5161b54.dir
+  size: 468270
+  nfiles: 1
+  hash: md5
+  path: golden-set-v1

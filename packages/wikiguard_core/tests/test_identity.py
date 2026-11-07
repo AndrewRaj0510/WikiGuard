@@ -74,6 +74,42 @@ def test_redact_removes_identifiers_and_keeps_the_rest() -> None:
     assert result.endswith("today")
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "blocked 8.8.8.8.",
+        "see 8.8.8.8.jpg",
+        "User talk:2001:db8:85a3:0:0:8a2e:370:7334 reverted",
+        "edits by 2001:db8:85a3:0:0:8a2e:370:7334: [[WP:VAND]]",
+        "Added:2001:db8:85a3:0:0:8a2e:370:7334 here",
+        "from 2001:db8:85a3::8a2e:370:7334 today",
+    ],
+)
+def test_redact_finds_addresses_that_punctuation_touches(text: str) -> None:
+    """Each of these reached a stored row before F-066, in the forms real comments use."""
+    result = redact_identifiers(text)
+
+    assert "8.8.8.8" not in result
+    assert "7334" not in result
+    assert REDACTED_IP in result
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "at 12:34:56 today",
+        "Genesis 1:2:3:4",
+        "std::cout and a::b",
+        "ratio 16:9:4:3",
+        "version 1.2.3",
+        "aired 2026.11.04",
+    ],
+)
+def test_redact_leaves_text_that_only_looks_like_an_address(text: str) -> None:
+    """Replacing these damaged what models read, and the raw text can't be recovered (F-066)."""
+    assert redact_identifiers(text) == text
+
+
 def stream_event(user: str, comment: str) -> dict[str, Any]:
     return {
         "user": user,

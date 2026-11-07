@@ -24,6 +24,17 @@ plugins = ["pydantic.mypy"]
 module = ["pyarrow", "pyarrow.*"]
 ignore_missing_imports = true
 
+# Training and serving libraries aren't installed in the main environment (F-049), so these
+# two modules can't be fully checked there. Everything else in wikiguard_core stays strict.
+[[tool.mypy.overrides]]
+module = ["torch", "torch.*", "transformers", "transformers.*", "mlflow", "mlflow.*", "onnxruntime", "onnxruntime.*", "tokenizers", "tokenizers.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["wikiguard_core.models", "wikiguard_core.tracking", "wikiguard_core.inference"]
+disallow_subclassing_any = false
+warn_return_any = false
+
 [tool.pytest.ini_options]
 addopts = "--import-mode=importlib"
 testpaths = ["packages", "services", "jobs", "tests"]
@@ -36,5 +47,6 @@ pythonpath = [
     "jobs/purge",
     "jobs/retention",
     "jobs",
+    "jobs/trainer",
 ]
 markers = ["integration: needs real Postgres or Redpanda, and skips itself when they are not set"]

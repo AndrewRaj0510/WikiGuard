@@ -8,6 +8,7 @@ alembic==1.20.1
 confluent-kafka==2.16.1
 httpx==0.28.1
 hypothesis==6.170.14
+numpy==2.4.6
 prometheus-client==0.26.0
 psycopg[binary]==3.3.8
 pyarrow==26.0.1

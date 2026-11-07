@@ -106,8 +106,7 @@ def test_every_table_has_row_level_security(database: Config) -> None:
     with migrated(database) as connection:
         rows = connection.execute(
             "SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace "
-            "WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p') AND NOT c.relrowsecurity "
-            "AND c.relname <> 'alembic_version'"
+            "WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p') AND NOT c.relrowsecurity"
         ).fetchall()
 
     assert rows == []
