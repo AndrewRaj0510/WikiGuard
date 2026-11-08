@@ -53,6 +53,7 @@ from wikiguard_core.models import (  # noqa: E402
     count_parameters,
     freeze_lower_layers,
 )
+from wikiguard_core.predictor import ChainEntry, Predictor  # noqa: E402
 from wikiguard_core.validation import DataValidationError  # noqa: E402
 
 CPU = torch.device("cpu")
@@ -333,8 +334,29 @@ def test_report_writes_calibration_into_the_artifact(data: Any, tmp_path: Path) 
     assert report["batch_vs_single"]["rows"] > 0
     assert (tmp_path / "scores.npz").exists()
     # Calibration is applied at serving, and it never reorders edits.
-    probabilities = ServedModel(folder).probabilities(data.test[:50])
+    served = ServedModel(folder)
+    probabilities = served.probabilities(data.test[:50])
     assert ((0 <= probabilities) & (probabilities <= 1)).all()
+    assert served.threshold == config["threshold_probability"]
+    assert 0 < served.threshold < 1
+
+    # A real model goes through the chain, including when a broken champion sits in front of it.
+    class BrokenChampion:
+        threshold = None
+
+        def probabilities(self, rows: Any) -> Any:
+            raise RuntimeError("broken")
+
+    rows = data.test[:5]
+    chain = [
+        ChainEntry("champion", "roberta", "1", BrokenChampion()),
+        ChainEntry("fallback-4", "mlp", "5", served),
+    ]
+    result = Predictor(chain, 5000).score(rows)
+    assert result.model_name == "mlp"
+    assert result.used_fallback is True
+    assert result.threshold == served.threshold
+    np.testing.assert_array_equal(result.scores, served.probabilities(rows))
 
 
 def test_tampering_after_calibration_stops_the_model_loading(data: Any, tmp_path: Path) -> None:

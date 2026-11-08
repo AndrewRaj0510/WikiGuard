@@ -21,6 +21,13 @@ ROLES = (
 )
 TABLES = (
     "audit_log",
+    "sessions",
+    "login_throttle",
+    "active_session",
+    "retrain_requests",
+    "retrain_runs",
+    "llm_usage",
+    "model_versions",
     "reviews",
     "explanations",
     "labels",
@@ -35,7 +42,7 @@ def migrated_url(monkeypatch: pytest.MonkeyPatch) -> str:
     if not URL:
         pytest.skip("TEST_DATABASE_URL is not set")
     with psycopg.connect(URL, autocommit=True) as connection:
-        row = connection.execute("SELECT to_regclass('public.audit_log')").fetchone()
+        row = connection.execute("SELECT to_regclass('public.login_throttle')").fetchone()
         if row is not None and row[0] is not None:
             return URL
         connection.execute("DROP SCHEMA public CASCADE")

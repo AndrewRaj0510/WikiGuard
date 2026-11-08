@@ -30,6 +30,8 @@ EXPECTED_TABLES = {
     "llm_usage",
     "audit_log",
     "active_session",
+    "sessions",
+    "login_throttle",
 }
 ROLES = {
     "wikiguard_api",
@@ -153,7 +155,7 @@ def test_roles_are_refused_outside_their_job(database: Config, role: str, statem
     ("role", "statement"),
     [
         ("wikiguard_api", "SELECT * FROM labels"),
-        ("wikiguard_api", "INSERT INTO reviews (rev_id, decision) VALUES (1, 'unsure')"),
+        ("wikiguard_api", "INSERT INTO reviews (rev_id, decision) VALUES (1, 'skip')"),
         ("wikiguard_labeler", "INSERT INTO labels (rev_id, label) VALUES (1, 1)"),
         ("wikiguard_scorer", "UPDATE edits SET title = 'x'"),
         ("wikiguard_maintenance", "DELETE FROM edits"),
@@ -233,7 +235,67 @@ def test_queue_query_uses_its_index(database: Config) -> None:
     with migrated(database) as connection:
         connection.execute("SET enable_seqscan = off")
         plan = connection.execute(
-            "EXPLAIN SELECT rev_id FROM scores ORDER BY score DESC, rev_id DESC LIMIT 50"
+            "EXPLAIN SELECT rev_id FROM edits WHERE latest_score IS NOT NULL "
+            "ORDER BY latest_score DESC, rev_id DESC LIMIT 50"
         ).fetchall()
 
-    assert "scores_queue" in str(plan)
+    assert "edits_queue" in str(plan)
+
+
+@pytest.mark.parametrize(
+    ("statement", "error"),
+    [
+        (
+            "INSERT INTO reviews (rev_id, decision) VALUES (1, 'not_vandalism')",
+            psycopg.errors.CheckViolation,
+        ),
+        (
+            "INSERT INTO retrain_requests (reason, kind) VALUES ('x', 'delete_everything')",
+            psycopg.errors.CheckViolation,
+        ),
+        (
+            "INSERT INTO sessions (id, role, csrf_token, client_hash, expires_at) "
+            "VALUES ('a', 'admin', 'c', 'h', now())",
+            psycopg.errors.CheckViolation,
+        ),
+    ],
+)
+def test_the_new_columns_refuse_bad_values(
+    database: Config, statement: str, error: type[Exception]
+) -> None:
+    with migrated(database) as connection, pytest.raises(error):
+        connection.execute(statement)
+
+
+def test_one_review_per_edit(database: Config) -> None:
+    with migrated(database) as connection:
+        review = "INSERT INTO reviews (rev_id, decision) VALUES (1, 'ok')"
+        connection.execute(review)
+        with pytest.raises(psycopg.errors.UniqueViolation):
+            connection.execute(review)
+
+
+def test_0003_keeps_existing_reviews_when_upgrading(database: Config) -> None:
+    command.upgrade(database, "0002")
+    with psycopg.connect(URL, autocommit=True) as connection:
+        for rev_id, decision in enumerate(("vandalism", "not_vandalism", "unsure")):
+            connection.execute(
+                "INSERT INTO reviews (rev_id, decision) VALUES (%s, %s)", (rev_id, decision)
+            )
+    command.upgrade(database, "head")
+    with psycopg.connect(URL, autocommit=True) as connection:
+        rows = connection.execute("SELECT decision FROM reviews ORDER BY decision").fetchall()
+    assert [row[0] for row in rows] == ["ok", "skip", "vandalism"]
+
+
+def test_the_api_role_can_use_sessions_but_the_scorer_cannot(database: Config) -> None:
+    with migrated(database) as connection:
+        as_role(connection, "wikiguard_api")
+        connection.execute(
+            "INSERT INTO sessions (id, role, csrf_token, client_hash, expires_at) "
+            "VALUES ('a', 'guest', 'c', 'h', now())"
+        )
+        connection.execute("RESET ROLE")
+        as_role(connection, "wikiguard_scorer")
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            connection.execute("SELECT * FROM sessions")

@@ -1,7 +1,7 @@
 """Score edits with an exported model, using only ONNX Runtime and no PyTorch.
 
 Evaluation goes through this same class, so the numbers in the reports describe exactly what users
-get. Phase 3 builds the fallback chain on top of it.
+get. The fallback chain is in predictor.py, which keeps ONNX Runtime out of its own imports.
 """
 
 import json
@@ -48,7 +48,8 @@ class ServedModel:
         self.folder = folder
         self.kind: str = self.config["kind"]
         self.temperature: float = self.config.get("temperature", 1.0)
-        self.threshold: float | None = self.config.get("threshold")
+        # On the probability scale, so it compares directly with probabilities().
+        self.threshold: float | None = self.config.get("threshold_probability")
         self.metadata = MetadataSpec.from_dict(self.config["metadata"])
         self.tfidf: TfidfEncoder | None = None
         self.vocabulary: TokenVocabulary | None = None
@@ -143,6 +144,23 @@ class ServedModel:
         self, rows: Sequence[Row], batch_size: int = DEFAULT_BATCH
     ) -> NDArray[np.float64]:
         return sigmoid(self.logits(rows, batch_size) / self.temperature)
+
+
+class OneAtATime:
+    """Serving scores edits singly, even when they arrive in a batch.
+
+    On one thread that's the fastest way (RoBERTa: 30 ms an edit singly, 100 ms in batches of 32,
+    F-098). It also means an edit's score can't depend on which edits arrived with it, because int8
+    scoring shifts with batch composition (F-073). The evaluation's numbers do come from batches,
+    which docs/evaluation.md lists as a known limit.
+    """
+
+    def __init__(self, model: ServedModel) -> None:
+        self.model = model
+        self.threshold = model.threshold
+
+    def probabilities(self, rows: Sequence[Row]) -> NDArray[np.float64]:
+        return self.model.probabilities(rows, batch_size=1)
 
 
 def read_config(folder: Path) -> dict[str, Any]:

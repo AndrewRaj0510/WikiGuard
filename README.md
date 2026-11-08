@@ -2,7 +2,7 @@
 
 A live Wikipedia vandalism detector, designed as a production-style MLOps system that runs entirely on free services.
 
-> **Status: Phase 2 models trained and evaluated.** Five models are trained on a versioned dataset of about 95,000 edits, and the data pipeline runs on a laptop, with live edits going through Redpanda to a parquet archive. Nothing is deployed yet: no scorer, API, or UI, and results are from a held-out test window, not live traffic. This README is updated as each phase finishes.
+> **Status: Phase 2 models trained and evaluated.** Five models are trained on a versioned dataset of about 95,000 edits, and the data pipeline runs on a laptop, with live edits going through Redpanda to a parquet archive. Phase 3's scorer and API are built, and the whole pipeline runs locally in Docker Compose against recorded Wikipedia data. Nothing is deployed, there's no UI yet, and Explain hasn't been measured against a real LLM. Model results are from a held-out test window, not live traffic. This README is updated as each phase finishes.
 
 ## What it will do
 
@@ -93,7 +93,7 @@ App and Grafana screenshots will appear here once those exist.
 | 0 | Setup | Done |
 | 1 | Data foundation | Done locally; not yet on Supabase or CI |
 | 2 | Train and evaluate five models | Trained, evaluated, and registered on DagsHub; ARM benchmarks still open |
-| 3 | Serving, API, and Explain | Not started |
+| 3 | Serving, API, and Explain | Built and tested locally. Not deployed, and Explain not yet measured on a real LLM |
 | 4 | Frontend | Not started |
 | 5 | Monitoring and continuous training | Not started |
 | 6 | CI/CD and security | Not started |
@@ -256,7 +256,30 @@ Do these for each project, staging first:
 | `maintenance_login` | `wikiguard_maintenance` | Purge and retention | Phase 1 |
 | `scorer_login` | `wikiguard_scorer` | Scorer | Phase 3 |
 | `api_login` | `wikiguard_api` | API | Phase 3 |
-| `trainer_login` | `wikiguard_trainer` | Trainer and monitor | Phase 5 |
+| `trainer_login` | `wikiguard_trainer` | Retrain-request poller, then trainer and monitor | Phase 3 |
+
+### Running the whole pipeline locally
+
+`.env` needs its secrets first. Make the password hash with `scripts/hash_password.py`, and wrap it in single quotes in `.env`, because it contains `$` signs. Model files come from `data/runs`.
+
+```powershell
+docker compose up -d --build
+docker compose run --rm labeler
+docker compose run --rm retrain-poller
+```
+
+The API is then at `http://127.0.0.1:8000`, and its schema at `/v1/openapi.json`. This uses the live Wikimedia stream.
+
+To test everything end to end, with recorded data, throwaway secrets, and no `.env`:
+
+```powershell
+.venv\Scripts\python scripts\compose_e2e.py
+.venv\Scripts\python scripts\compose_e2e.py --render-limits   # also at 0.1 CPU and 512 MB
+```
+
+For the integration tests, start `postgres` and `redpanda`, and point `TEST_DATABASE_URL` at a throwaway database, because they delete data.
+
+To measure Explain on a real model, which spends credits: `.venv\Scripts\python scripts\eval_explain.py --provider openai`.
 
 More setup steps will be added as the project grows. The accounts and tools the project needs are listed at the start of Part 2 in [PLAN.md](docs/PLAN.md).
 

@@ -17,6 +17,17 @@ db = ["psycopg[binary]>=3.3,<4"]
 ops = ["prometheus-client>=0.26,<1"]
 # Scoring with an exported model. Serving images install this, and never PyTorch.
 serve = ["numpy>=2,<3", "onnxruntime>=1.31,<2", "tokenizers>=0.21,<1"]
+# Training only: everything serving must never need. PyTorch's GPU build comes from its own index,
+# so the exact pins stay in jobs/trainer/requirements.txt.
+train = [
+    "numpy>=2,<3",
+    "torch>=2.14,<3",
+    "transformers>=5.22,<6",
+    "mlflow-skinny==3.5.1",
+    "safetensors>=0.8,<1",
+    "onnx>=1.23,<2",
+    "onnxscript>=0.7,<1",
+]
 
 [tool.setuptools.packages.find]
 include = ["wikiguard_core*"]

@@ -12,6 +12,12 @@ select = ["E", "F", "I", "UP", "B", "S"]
 # Identifiers here come from constants in the migration itself, never from input.
 "jobs/migrate/migrations/**" = ["S608"]
 "jobs/conftest.py" = ["S101", "S608"]
+# Column lists and conditions are constants here. Every value goes through a query parameter.
+"services/api/wikiguard_api/**" = ["S608"]
+"services/api/api_test_helpers.py" = ["S101", "S105", "S106"]
+"scripts/tune_queries.py" = ["S608"]
+# Local throwaway database only, and the only value in its SQL is one the script just read from it.
+"scripts/compose_e2e.py" = ["S608"]
 
 [tool.mypy]
 python_version = "3.11"
@@ -43,7 +49,10 @@ pythonpath = [
     "scripts",
     "services/ingestor",
     "services/archiver",
+    "services/scorer",
+    "services/api",
     "jobs/labeler",
+    "jobs/retrain_poller",
     "jobs/purge",
     "jobs/retention",
     "jobs",

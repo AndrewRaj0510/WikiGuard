@@ -1,0 +1,47 @@
+# Added on top of docker-compose.yml by scripts/compose_e2e.py. Everything real except Wikimedia,
+# which is replaced with the recorded fixtures: tests must not call it (CLAUDE.md).
+services:
+  mock-wikimedia:
+    image: python:3.11-slim
+    volumes:
+      - ./tests/e2e/mock_wikimedia.py:/app/mock_wikimedia.py:ro
+      - ./tests/fixtures/wikimedia:/fixtures:ro
+    command: ["python", "/app/mock_wikimedia.py", "/fixtures"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health')"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  ingestor:
+    environment:
+      WIKIMEDIA_STREAM_URL: http://mock-wikimedia:8080/stream
+      MEDIAWIKI_API_URL: http://mock-wikimedia:8080/w/api.php
+    depends_on:
+      mock-wikimedia:
+        condition: service_healthy
+
+  # The API under Render's free limits, with the real champion and MLP (DEC-050, F-088).
+  api-render:
+    profiles: ["render"]
+    extends:
+      file: docker-compose.yml
+      service: api
+    cpus: 0.1
+    mem_limit: 512m
+    memswap_limit: 512m
+    ports: !override
+      - "127.0.0.1:8766:8000"
+    volumes: !override
+      - ./data/runs:/runs:ro
+      - api-render-models:/models/cache
+
+  labeler:
+    environment:
+      MEDIAWIKI_API_URL: http://mock-wikimedia:8080/w/api.php
+    depends_on:
+      mock-wikimedia:
+        condition: service_healthy
+
+volumes:
+  api-render-models:

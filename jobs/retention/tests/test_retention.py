@@ -138,3 +138,24 @@ def test_the_maintenance_role_has_every_permission_it_needs(db: psycopg.Connecti
         db.rollback()
         db.execute("RESET ROLE")
     assert results["rows_deleted"] == 1
+
+
+def test_old_ended_sessions_are_removed_and_live_ones_kept(db: psycopg.Connection[Any]) -> None:
+    for session_id, created, ended in (
+        ("old-ended", ago(days=8), ago(days=8)),
+        ("recent-ended", ago(days=1), ago(days=1)),
+        ("old-live", ago(days=8), None),
+    ):
+        db.execute(
+            "INSERT INTO sessions (id, role, csrf_token, client_hash, expires_at, created_at, "
+            "ended_at) VALUES (%s, 'user', 'c', 'h', %s, %s, %s)",
+            (session_id, NOW, created, ended),
+        )
+    db.commit()
+
+    results = run(db, NOW)
+
+    assert results["sessions_deleted"] == 1
+    rows = db.execute("SELECT id FROM sessions ORDER BY id").fetchall()
+    db.commit()
+    assert [row[0] for row in rows] == ["old-live", "recent-ended"]

@@ -34,8 +34,11 @@ LIMIT_BYTES = 500 * 1024 * 1024
 WARN_AT = 0.70
 SHRINK_AT = 0.85
 EMERGENCY_AT = 0.95
-# An estimate until the first model exists. Phase 3 sets it from the score distribution.
-HIGH_RISK_SCORE = 0.8
+# The top 5% of RoBERTa's calibrated test scores start here (docs/metrics.md, section 8). 0.8 was
+# the earlier estimate, and it only caught 0.89% of edits. Revisit it if the champion changes.
+HIGH_RISK_SCORE = 0.18
+# Ended sessions only matter for the guest wait and for tracing, so they don't need to stay long.
+SESSION_RETENTION = timedelta(days=7)
 
 
 @dataclass(frozen=True)
@@ -87,7 +90,15 @@ def apply(connection: psycopg.Connection[Any], windows: Windows, now: datetime) 
     rows_deleted = connection.execute(
         "DELETE FROM edits WHERE edited_at < %s", (now - windows.rows,)
     ).rowcount
-    return {"text_cleared": text_cleared, "rows_deleted": rows_deleted}
+    sessions_deleted = connection.execute(
+        "DELETE FROM sessions WHERE created_at < %s AND ended_at IS NOT NULL",
+        (now - SESSION_RETENTION,),
+    ).rowcount
+    return {
+        "text_cleared": text_cleared,
+        "rows_deleted": rows_deleted,
+        "sessions_deleted": sessions_deleted,
+    }
 
 
 def run(

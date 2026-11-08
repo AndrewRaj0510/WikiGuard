@@ -71,6 +71,27 @@ class MlflowSettings(BaseConfig):
 class ServingSettings(BaseConfig):
     force_model: str | None = None
     predict_timeout_ms: int = Field(default=300, gt=0)
+    # mlflow reads the registry. local reads the trainer's folder, for Compose and tests.
+    model_source: Literal["mlflow", "local"] = "mlflow"
+    model_cache_dir: str = "data/model_cache"
+    local_runs_path: str = "data/runs"
+    # 0 turns polling off. Render does, because a reload holds two models at once (DEC-055).
+    model_poll_seconds: int = Field(default=300, ge=0)
+    # champion_and_last on Render, where 512 MB can't hold the whole chain (DEC-050).
+    model_chain_mode: Literal["full", "champion_and_last"] = "full"
+    onnx_threads: int = Field(default=1, gt=0)
+    # Optional: DagsHub's MLflow can be read without a login (F-093). Use a read-only token if set.
+    mlflow_tracking_uri: str | None = None
+    mlflow_tracking_username: str | None = None
+    mlflow_tracking_password: SecretStr | None = None
+
+
+class ScorerSettings(BaseConfig):
+    scorer_batch_size: int = Field(default=32, gt=0)
+    scorer_batch_window_ms: int = Field(default=50, ge=0)
+    # Past this many edits behind, use the fast models. At half of it, go back (F-100).
+    scorer_shed_lag: int = Field(default=500, gt=0)
+    scorer_rescore_seconds: int = Field(default=60, gt=0)
 
 
 class ApiSettings(BaseConfig):
@@ -78,6 +99,14 @@ class ApiSettings(BaseConfig):
     user_password_hash: SecretStr
     metrics_bearer_token: SecretStr
     cors_allowed_origins: str = "http://localhost:3000"
+    # The Worker sends this header. Set it and direct requests are refused, and only then is the
+    # Worker's client-IP header believed. Blank in local dev.
+    edge_shared_secret: SecretStr | None = None
+    guest_signin_wait_seconds: int = Field(default=60, ge=0)
+    predict_max_concurrency: int = Field(default=2, gt=0)
+    db_statement_timeout_ms: int = Field(default=3000, gt=0)
+    db_pool_size: int = Field(default=5, gt=0)
+    max_body_bytes: int = Field(default=128 * 1024, gt=0)
 
 
 class FeatureFlagSettings(BaseConfig):
@@ -107,6 +136,8 @@ class RetrainSettings(BaseConfig):
     retrain_interval_days: int = 7
     retrain_on_drift: bool = True
     retrain_startup_delay_seconds: int = Field(default=300, ge=0)
+    # What the retrain-request poller runs. Blank means requests are recorded as failed.
+    trainer_command: str | None = None
 
     @field_validator("retrain_interval_days")
     @classmethod

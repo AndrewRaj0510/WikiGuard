@@ -1,5 +1,18 @@
-# Local development services. Copy .env.example to .env and set POSTGRES_PASSWORD first.
+# The whole pipeline, locally. Copy .env.example to .env and fill it in first:
+#   docker compose up -d --build
+#   docker compose run --rm labeler        # labels are hourly in the cluster, and by hand here
+# postgres and redpanda alone, for the integration tests:
+#   docker compose up -d postgres redpanda
 name: wikiguard
+
+x-app-env: &app-env
+  ENVIRONMENT: dev
+  KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+
+# The end-to-end run points this at its own throwaway file, so it never reads a real .env.
+x-env-file: &env-file
+  - path: ${APP_ENV_FILE:-.env}
+    required: false
 
 services:
   postgres:
@@ -31,9 +44,9 @@ services:
       - --smp=1
       - --memory=1G
       - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092
-      - --advertise-kafka-addr=internal://redpanda:9092,external://127.0.0.1:19092
+      - --advertise-kafka-addr=internal://redpanda:9092,external://127.0.0.1:${REDPANDA_PORT:-19092}
     ports:
-      - "127.0.0.1:19092:19092"
+      - "127.0.0.1:${REDPANDA_PORT:-19092}:19092"
     volumes:
       - redpanda-data:/var/lib/redpanda/data
     healthcheck:
@@ -42,6 +55,142 @@ services:
       timeout: 5s
       retries: 30
 
+  # Tables, roles, and RLS, then a login for each role. Each service below connects with the same
+  # least privilege it has in production, so a missing grant fails here first.
+  migrate:
+    build:
+      context: .
+      dockerfile: jobs/migrate/Dockerfile
+    environment:
+      DATABASE_MIGRATIONS_URL: postgresql://${POSTGRES_USER:-wikiguard}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-wikiguard}
+      COMPOSE_LOGIN_PASSWORD: ${COMPOSE_LOGIN_PASSWORD:-${POSTGRES_PASSWORD}}
+    command: >-
+      sh -c "alembic -c jobs/migrate/alembic.ini upgrade head
+      && python jobs/migrate/create_local_logins.py"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Fills the leaderboard from the trainer's output.
+  sync-models:
+    build:
+      context: .
+      dockerfile: jobs/migrate/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://trainer_login:${COMPOSE_LOGIN_PASSWORD:-${POSTGRES_PASSWORD}}@postgres:5432/${POSTGRES_DB:-wikiguard}
+    volumes:
+      - ./data/runs:/runs:ro
+      - ./scripts/sync_model_versions.py:/app/sync_model_versions.py:ro
+    command: ["python", "sync_model_versions.py", "--runs", "/runs"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  ingestor:
+    build:
+      context: .
+      dockerfile: services/ingestor/Dockerfile
+    env_file: *env-file
+    environment:
+      <<: *app-env
+      INGEST_STATE_PATH: /app/data/ingestor_state.json
+    volumes:
+      - ingestor-state:/app/data
+    depends_on:
+      redpanda:
+        condition: service_healthy
+
+  scorer:
+    build:
+      context: .
+      dockerfile: services/scorer/Dockerfile
+    env_file: *env-file
+    environment:
+      <<: *app-env
+      DATABASE_URL: postgresql://scorer_login:${COMPOSE_LOGIN_PASSWORD:-${POSTGRES_PASSWORD}}@postgres:5432/${POSTGRES_DB:-wikiguard}
+      MODEL_SOURCE: ${MODEL_SOURCE:-local}
+      LOCAL_RUNS_PATH: /runs
+      MODEL_CACHE_DIR: /models/cache
+    volumes:
+      - ./data/runs:/runs:ro
+      - scorer-models:/models/cache
+    depends_on:
+      redpanda:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  archiver:
+    build:
+      context: .
+      dockerfile: services/archiver/Dockerfile
+    env_file: *env-file
+    environment:
+      <<: *app-env
+      ARCHIVE_PATH: /archive
+    volumes:
+      - archive-data:/archive
+    depends_on:
+      redpanda:
+        condition: service_healthy
+
+  api:
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+    env_file: *env-file
+    environment:
+      ENVIRONMENT: dev
+      DATABASE_URL: postgresql://api_login:${COMPOSE_LOGIN_PASSWORD:-${POSTGRES_PASSWORD}}@postgres:5432/${POSTGRES_DB:-wikiguard}
+      MODEL_SOURCE: ${MODEL_SOURCE:-local}
+      LOCAL_RUNS_PATH: /runs
+      MODEL_CACHE_DIR: /models/cache
+      # What Render will run: the champion and the MLP, and no reloading (DEC-055).
+      MODEL_CHAIN_MODE: champion_and_last
+      MODEL_POLL_SECONDS: "0"
+      PREDICT_TIMEOUT_MS: "5000"
+    ports:
+      - "127.0.0.1:${API_PORT:-8000}:8000"
+    volumes:
+      - ./data/runs:/runs:ro
+      - api-models:/models/cache
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  # Run by hand, or by a CronJob in the cluster:  docker compose run --rm labeler
+  labeler:
+    build:
+      context: .
+      dockerfile: jobs/labeler/Dockerfile
+    profiles: ["jobs"]
+    env_file: *env-file
+    environment:
+      <<: *app-env
+      DATABASE_URL: postgresql://labeler_login:${COMPOSE_LOGIN_PASSWORD:-${POSTGRES_PASSWORD}}@postgres:5432/${POSTGRES_DB:-wikiguard}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redpanda:
+        condition: service_healthy
+
+  retrain-poller:
+    build:
+      context: .
+      dockerfile: jobs/retrain_poller/Dockerfile
+    profiles: ["jobs"]
+    env_file: *env-file
+    environment:
+      <<: *app-env
+      DATABASE_URL: postgresql://trainer_login:${COMPOSE_LOGIN_PASSWORD:-${POSTGRES_PASSWORD}}@postgres:5432/${POSTGRES_DB:-wikiguard}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
 volumes:
   postgres-data:
   redpanda-data:
+  ingestor-state:
+  scorer-models:
+  api-models:
+  archive-data:
