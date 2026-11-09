@@ -2,7 +2,7 @@
 
 A live Wikipedia vandalism detector, designed as a production-style MLOps system that runs entirely on free services.
 
-> **Status: Phase 2 models trained and evaluated.** Five models are trained on a versioned dataset of about 95,000 edits, and the data pipeline runs on a laptop, with live edits going through Redpanda to a parquet archive. Phase 3's scorer and API are built, and the whole pipeline runs locally in Docker Compose against recorded Wikipedia data. Nothing is deployed, there's no UI yet, and Explain hasn't been measured against a real LLM. Model results are from a held-out test window, not live traffic. This README is updated as each phase finishes.
+> **Status: Phase 2 models trained and evaluated.** Five models are trained on a versioned dataset of about 95,000 edits, and the data pipeline runs on a laptop, with live edits going through Redpanda to a parquet archive. Phase 3's scorer and API are built, and the whole pipeline runs locally in Docker Compose against recorded Wikipedia data. Phase 4's Next.js app is built and tested locally: the live feed, review queue, edit pages with Explain and review, model and health pages, sign-in, and the single-seat gate. Nothing is deployed, and Explain hasn't been measured against a real LLM. Model results are from a held-out test window, not live traffic. This README is updated as each phase finishes.
 
 ## What it will do
 
@@ -69,9 +69,9 @@ Everything runs on free tiers except OpenAI API credits for the Explain feature.
 | Admin access | Tailscale (free) |
 | Errors and alerts | Sentry, Discord, UptimeRobot, and Healthchecks.io (free tiers) |
 
-## Access (planned)
+## Access
 
-The demo allows one person at a time, in one tab, which keeps it within free limits. The landing page is always open, even when the app is in use.
+Built and tested locally, not yet deployed. The demo allows one person at a time, in one tab, which keeps it within free limits. The landing page is always open, even when the app is in use.
 
 | Account | Sign-in | Can do |
 |---|---|---|
@@ -84,7 +84,13 @@ The demo allows one person at a time, in one tab, which keeps it within free lim
 
 ![Precision against recall for all five models. The models differ most at low recall, where RoBERTa and BERT keep the highest precision, and they converge beyond about 50% recall.](docs/images/readme/eval_pr_curves_all_2026-11-07.png)
 
-App and Grafana screenshots will appear here once those exist.
+![The review queue: edits ranked by risk, each with a band, a score, a Logged out label where it applies, the size of the change, and the model that scored it.](docs/images/readme/app_queue_light_2026-11-09.png)
+
+![One edit's page as the owner: the text it removed and added side by side, the review buttons with their keyboard keys, the score on a meter, and the Explain panel.](docs/images/readme/app_edit_owner_light_2026-11-09.png)
+
+![The Models page: a leaderboard of the five models with 95% intervals as whiskers, and their precision-recall curves.](docs/images/readme/app_models_light_2026-11-09.png)
+
+The app screenshots use the real models and their measured results, with recorded Wikipedia edits whose text was scrubbed for the test fixtures. Grafana screenshots come in Phase 7.
 
 ## Roadmap
 
@@ -94,7 +100,7 @@ App and Grafana screenshots will appear here once those exist.
 | 1 | Data foundation | Done locally; not yet on Supabase or CI |
 | 2 | Train and evaluate five models | Trained, evaluated, and registered on DagsHub; ARM benchmarks still open |
 | 3 | Serving, API, and Explain | Built and tested locally. Not deployed, and Explain not yet measured on a real LLM |
-| 4 | Frontend | Not started |
+| 4 | Frontend | Built and tested locally. The Vercel deploy waits on the owner's account |
 | 5 | Monitoring and continuous training | Not started |
 | 6 | CI/CD and security | Not started |
 | 7 | Kubernetes and deployment | Not started |
@@ -280,6 +286,41 @@ To test everything end to end, with recorded data, throwaway secrets, and no `.e
 For the integration tests, start `postgres` and `redpanda`, and point `TEST_DATABASE_URL` at a throwaway database, because they delete data.
 
 To measure Explain on a real model, which spends credits: `.venv\Scripts\python scripts\eval_explain.py --provider openai`.
+
+### Frontend
+
+You need Node.js 22. The app calls the API at `/api` on its own address, the way the Cloudflare Worker will serve it, so locally a Next.js rewrite sends `/api` to the API. Open it at `http://localhost:3000`, because the API's CORS allowlist names that address.
+
+```powershell
+cd frontend
+npm ci
+npm test               # unit tests (Vitest)
+npm run lint
+npm run typecheck
+$env:API_ORIGIN = "http://127.0.0.1:8000"   # read when building, never sent to the browser
+npm run build
+npm start
+
+# Checks on a build. None needs a backend: the E2E tests mock the API in the browser.
+npm run check:bundle                 # no secrets in client files; each page within its JS budget
+npx playwright install chromium      # once
+npm run test:e2e                     # flows, XSS corpus, axe, keyboard, headers
+npx lhci autorun                     # Lighthouse budgets on the public pages
+```
+
+Every page renders per request so it can carry a fresh CSP nonce (DEC-065). To screenshot every page against the fixture stack, as guest and owner: `node scripts\capture_screenshots.mjs --password-file data\fixture_stack\user_password.txt`. The model cards and PR curves come from `scripts\export_pr_curves.py SNAPSHOT`, then `scripts\sync_model_versions.py`.
+
+After an API change, refresh the types: `.venv\Scripts\python scripts\export_openapi.py`, then `npm run types` in `frontend/`. `scripts\export_openapi.py --check` fails if the schema file is out of date.
+
+To try it against recorded data with no `.env`, run `.venv\Scripts\python scripts\fixture_stack.py`, which leaves the API at `http://127.0.0.1:8765` with Explain switched off, and build with `API_ORIGIN` set to that. `--down` stops it.
+
+### Deploying the frontend to Vercel (owner)
+
+1. In Vercel, import the GitHub repo, and set **Root Directory** to `frontend`. Vercel detects Next.js, and `package.json` asks for Node 22.
+2. Leave `API_ORIGIN` unset until the API is on Render (Phase 7). Until then, only the landing and privacy pages work there; the console says it can't reach the API. Set no `NEXT_PUBLIC_` variable: none is needed, and anything in one reaches every browser.
+3. Deploy, then check one page's headers for `content-security-policy` with a nonce. `npm run check:bundle` and the E2E suite run in CI on every push.
+
+In Phase 7 the Cloudflare Worker becomes the one address: `/api` goes to Render with the prefix stripped, and everything else to Vercel.
 
 More setup steps will be added as the project grows. The accounts and tools the project needs are listed at the start of Part 2 in [PLAN.md](docs/PLAN.md).
 

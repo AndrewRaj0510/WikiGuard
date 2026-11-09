@@ -29,6 +29,23 @@ REPORT_FIELDS = (
     "served_bytes",
     "training_warnings",
 )
+# The rest of a model card (docs/model-cards), as numbers the Models page can lay out itself.
+CARD_FIELDS = (
+    "threshold_rule",
+    "at_threshold",
+    "ece_before",
+    "train_rows",
+    "rows",
+    "positives",
+    "params",
+    "parameters",
+    "device_name",
+    "snapshot",
+    "false_positive_gap_anonymous_minus_registered",
+)
+# Per slice, only counts and rates: never anything that names an edit or an editor.
+SLICE_FIELDS = ("rows", "positives", "pr_auc", "false_positive_rate")
+CURVE_FILE = "pr_curve.json"  # from scripts/export_pr_curves.py
 UPSERT = """
     INSERT INTO model_versions (model_name, model_version, alias, feature_version, snapshot_hash,
         artifact_sha256, metrics)
@@ -39,6 +56,26 @@ UPSERT = """
 """
 
 
+def card_of(report: dict[str, Any], folder: Path) -> dict[str, Any]:
+    card: dict[str, Any] = {key: report[key] for key in CARD_FIELDS if key in report}
+    card["slices"] = {
+        name: {key: values[key] for key in SLICE_FIELDS if key in values}
+        for name, values in report.get("slices", {}).items()
+        if isinstance(values, dict)
+    }
+    if "fit" in report:
+        card["fit_minutes"] = round(report["fit"]["seconds"] / 60, 1)
+    if "parity" in report:
+        card["parity_gap"] = report["parity"]["test"]["gap"]
+    golden = folder / "golden.json"
+    if golden.is_file():
+        card["golden_pr_auc"] = json.loads(golden.read_text("utf-8"))["pr_auc"]
+    curve = folder / CURVE_FILE
+    if curve.is_file():
+        card["pr_curve"] = json.loads(curve.read_text("utf-8"))
+    return card
+
+
 def read_runs(runs: Path) -> list[dict[str, Any]]:
     aliases = json.loads((runs / "aliases.json").read_text("utf-8"))
     rows = []
@@ -47,6 +84,7 @@ def read_runs(runs: Path) -> list[dict[str, Any]]:
         report = json.loads((runs / name / "report.json").read_text("utf-8"))
         config = json.loads((runs / name / ARTIFACT_FOLDER / "config.json").read_text("utf-8"))
         metrics = {key: report[key] for key in REPORT_FIELDS if key in report}
+        metrics["card"] = card_of(report, runs / name)
         benchmark_file = runs / "benchmarks" / f"laptop_{name}.json"
         if benchmark_file.is_file():
             benchmark = json.loads(benchmark_file.read_text("utf-8"))

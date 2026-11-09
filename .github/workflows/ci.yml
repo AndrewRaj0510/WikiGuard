@@ -60,6 +60,44 @@ jobs:
       - run: pip install -r requirements-dev.txt
       - run: pytest -m integration
 
+  # The Next.js app (Phase 4): contract, lint, types, unit tests, build, secrets in the bundle,
+  # page budgets, end-to-end with the API mocked in the browser (XSS corpus, axe, keyboard), and
+  # Lighthouse. Nothing here reaches Wikimedia, an LLM, or a real API.
+  frontend:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements-dev.txt
+        working-directory: .
+      - name: The committed API schema matches the API's code
+        run: python scripts/export_openapi.py --check
+        working-directory: .
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: The frontend's types match the schema (contract drift fails here)
+        run: npm run types && git diff --exit-code -- src/lib/api/schema.d.ts
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: No secrets in the client bundle, and each page within its JavaScript budget
+        run: npm run check:bundle
+      - run: npx playwright install --with-deps chromium
+      - name: End to end, the XSS corpus, axe, and the keyboard flow
+        run: npm run test:e2e
+      - name: Lighthouse budgets
+        run: npx lhci autorun
+
   gitleaks:
     runs-on: ubuntu-24.04
     env:

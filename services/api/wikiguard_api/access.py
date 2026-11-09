@@ -113,18 +113,31 @@ class Access:
     # --- Housekeeping ---
 
     def _sweep(self, tx: Tx) -> None:
-        """End guest sessions past their limits, and any session past its expiry, and free seats."""
+        """End guest sessions past their limits, and any session past its expiry, and free seats.
+
+        ended_at is when the limit passed, not when this noticed. The guest wait counts from
+        ended_at, so dating it now() made the next visitor from that address wait after any
+        abandoned tab, and a refused sign-in rolled the sweep back, so it never ended (F-109).
+        LEAST skips the NULL a `user` session gives.
+        """
         tx.run(
             """
-            UPDATE sessions SET ended_at = now(), ended_reason = 'expired'
+            UPDATE sessions SET ended_reason = 'expired', ended_at = LEAST(
+                now(),
+                expires_at,
+                CASE WHEN role = 'guest' THEN LEAST(
+                    created_at + %(max)s::interval, last_activity_at + %(idle)s::interval
+                ) END
+            )
             WHERE ended_at IS NULL AND (
                 expires_at <= now()
                 OR (role = 'guest' AND (
-                    created_at <= now() - %s::interval OR last_activity_at <= now() - %s::interval
+                    created_at <= now() - %(max)s::interval
+                    OR last_activity_at <= now() - %(idle)s::interval
                 ))
             )
             """,
-            (self._max, self._idle),
+            {"max": self._max, "idle": self._idle},
         )
         tx.run(
             "DELETE FROM active_session a USING sessions s "
@@ -358,7 +371,8 @@ class Access:
                 raise Problem(401, "not_signed_in", "Sign in first")
             if row["is_over"]:
                 if not row["already_ended"]:
-                    self._end_session(tx, session_id, "expired")
+                    # The sweep ends it dated when it ran out, and frees its seat (F-109).
+                    self._sweep(tx)
                 reason = row["ended_reason"] or "expired"
                 # Raised after the block's commit, so ending the session isn't rolled back.
                 expired = Problem(

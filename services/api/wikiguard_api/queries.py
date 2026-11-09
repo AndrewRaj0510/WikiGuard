@@ -196,8 +196,9 @@ def health_summary(tx: Tx) -> dict[str, Any]:
         "drift_reports": tx.all(
             "SELECT created_at, drifted FROM drift_reports ORDER BY created_at DESC LIMIT 10"
         ),
+        # details holds the trainer's before vs after report, which the Health page shows.
         "retrain_runs": tx.all(
-            "SELECT trigger, status, started_at, finished_at FROM retrain_runs "
+            "SELECT id, trigger, status, started_at, finished_at, details FROM retrain_runs "
             "ORDER BY started_at DESC LIMIT 10"
         ),
     }

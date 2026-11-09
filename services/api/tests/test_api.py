@@ -10,6 +10,7 @@ import psycopg
 import pytest
 from api_test_helpers import METRICS_TOKEN, PASSWORD, Browser, Stack, one, seed_edit
 from fastapi.routing import APIRoute
+from psycopg.types.json import Jsonb
 from wikiguard_api.access import Principal
 from wikiguard_api.app import MAX_PAGE_SIZE, SESSION_COOKIE, create_app
 from wikiguard_api.foundations import DatabaseUnavailable
@@ -448,6 +449,43 @@ def test_the_wait_ends_after_a_minute(
     assert stack.browser(TAB_B).guest().status_code == 200
 
 
+def abandon(db: psycopg.Connection[Any], idle_for: str) -> None:
+    """A guest who closed the tab: no sign-out, no release, and the lease long gone."""
+    db.execute(
+        "UPDATE sessions SET created_at = now() - %(ago)s::interval, "
+        "last_activity_at = now() - %(ago)s::interval",
+        {"ago": idle_for},
+    )
+    db.execute("UPDATE active_session SET lease_expires_at = now() - interval '1 second'")
+    db.commit()
+
+
+def test_an_abandoned_guest_session_doesnt_hold_off_the_next_guest(
+    stack: Stack, guest: Browser, db: psycopg.Connection[Any]
+) -> None:
+    """Found in Phase 4 (F-109): the sweep dated the end now(), so the next guest from that
+    address was always told to wait, and the refusal rolled the sweep back, so it never ended."""
+    abandon(db, "10 minutes")
+    assert stack.browser(TAB_B).guest().status_code == 200
+    # Dated when the 5 idle minutes ran out, not when the sweep noticed.
+    ended = one(
+        db,
+        "SELECT ended_at BETWEEN now() - interval '5 minutes 30 seconds' "
+        "AND now() - interval '4 minutes 30 seconds' FROM sessions WHERE ended_reason = 'expired'",
+    )
+    assert ended == (True,)
+
+
+def test_a_guest_who_ran_out_moments_ago_still_waits(
+    stack: Stack, guest: Browser, db: psycopg.Connection[Any]
+) -> None:
+    abandon(db, "5 minutes 20 seconds")
+    response = stack.browser(TAB_B).guest()
+    assert response.status_code == 429
+    assert response.json()["code"] == "guest_cooldown"
+    assert 30 <= int(response.headers["retry-after"]) <= 41
+
+
 def test_user_must_confirm_before_taking_the_seat_from_a_guest(
     stack: Stack, guest: Browser
 ) -> None:
@@ -785,6 +823,22 @@ def test_the_health_summary_counts_fallbacks(
     assert body["unscored_edits"] == 1
     assert body["models_loaded"] is True
     assert [item["breaker"] for item in body["chain"]] == ["closed", "closed"]
+
+
+def test_the_health_summary_carries_each_retrain_report(
+    guest: Browser, db: psycopg.Connection[Any]
+) -> None:
+    """The Health page shows the trainer's before vs after report from details (DEC-066)."""
+    report = {"before": {"model": "roberta", "pr_auc": 0.36}, "after": {"pr_auc": 0.37}}
+    db.execute(
+        "INSERT INTO retrain_runs (trigger, status, details) VALUES ('scheduled', 'done', %s)",
+        (Jsonb(report),),
+    )
+    db.commit()
+    [run] = guest.get("/v1/health/summary").json()["retrain_runs"]
+    assert run["trigger"] == "scheduled"
+    assert run["details"] == report
+    assert isinstance(run["id"], int)
 
 
 # --- /predict ---

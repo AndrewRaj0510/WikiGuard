@@ -1,0 +1,1868 @@
+{
+  "components": {
+    "schemas": {
+      "BreakerInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "alias": {
+            "title": "Alias",
+            "type": "string"
+          },
+          "breaker": {
+            "title": "Breaker",
+            "type": "string"
+          },
+          "model_name": {
+            "title": "Model Name",
+            "type": "string"
+          },
+          "model_version": {
+            "title": "Model Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "alias",
+          "model_name",
+          "model_version",
+          "breaker"
+        ],
+        "title": "BreakerInfo",
+        "type": "object"
+      },
+      "ClaimSeat": {
+        "additionalProperties": false,
+        "properties": {
+          "tab_id": {
+            "pattern": "^[A-Za-z0-9_-]{8,64}$",
+            "title": "Tab Id",
+            "type": "string"
+          },
+          "take_over": {
+            "default": false,
+            "title": "Take Over",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "tab_id"
+        ],
+        "title": "ClaimSeat",
+        "type": "object"
+      },
+      "EditDetail": {
+        "additionalProperties": false,
+        "properties": {
+          "added_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Added Text"
+          },
+          "bytes_delta": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bytes Delta"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "comment_hidden": {
+            "title": "Comment Hidden",
+            "type": "boolean"
+          },
+          "content_hidden": {
+            "title": "Content Hidden",
+            "type": "boolean"
+          },
+          "decision": {
+            "anyOf": [
+              {
+                "enum": [
+                  "vandalism",
+                  "good_faith_mistake",
+                  "ok",
+                  "skip"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision"
+          },
+          "edited_at": {
+            "format": "date-time",
+            "title": "Edited At",
+            "type": "string"
+          },
+          "has_explanation": {
+            "title": "Has Explanation",
+            "type": "boolean"
+          },
+          "is_anonymous": {
+            "title": "Is Anonymous",
+            "type": "boolean"
+          },
+          "is_minor": {
+            "title": "Is Minor",
+            "type": "boolean"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "label_excluded_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label Excluded Reason"
+          },
+          "load_shed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Load Shed"
+          },
+          "model_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Name"
+          },
+          "model_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Version"
+          },
+          "parent_rev_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Rev Id"
+          },
+          "removed_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Removed Text"
+          },
+          "rev_id": {
+            "title": "Rev Id",
+            "type": "integer"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "scores": {
+            "items": {
+              "$ref": "#/components/schemas/ScoreInfo"
+            },
+            "title": "Scores",
+            "type": "array"
+          },
+          "threshold": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "used_fallback": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Used Fallback"
+          },
+          "user_edit_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Edit Count"
+          },
+          "user_hidden": {
+            "title": "User Hidden",
+            "type": "boolean"
+          },
+          "wikipedia_url": {
+            "title": "Wikipedia Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rev_id",
+          "title",
+          "edited_at",
+          "is_minor",
+          "is_anonymous",
+          "comment",
+          "bytes_delta",
+          "score",
+          "model_name",
+          "model_version",
+          "threshold",
+          "used_fallback",
+          "load_shed",
+          "decision",
+          "content_hidden",
+          "wikipedia_url",
+          "parent_rev_id",
+          "added_text",
+          "removed_text",
+          "comment_hidden",
+          "user_hidden",
+          "user_edit_count",
+          "scores",
+          "label",
+          "label_excluded_reason",
+          "has_explanation"
+        ],
+        "title": "EditDetail",
+        "type": "object"
+      },
+      "EditPage": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/EditSummary"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "stale": {
+            "title": "Stale",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor",
+          "stale"
+        ],
+        "title": "EditPage",
+        "type": "object"
+      },
+      "EditSummary": {
+        "additionalProperties": false,
+        "description": "A row in the feed or queue. Never carries diff text, so list views stay small.",
+        "properties": {
+          "bytes_delta": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bytes Delta"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "content_hidden": {
+            "title": "Content Hidden",
+            "type": "boolean"
+          },
+          "decision": {
+            "anyOf": [
+              {
+                "enum": [
+                  "vandalism",
+                  "good_faith_mistake",
+                  "ok",
+                  "skip"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision"
+          },
+          "edited_at": {
+            "format": "date-time",
+            "title": "Edited At",
+            "type": "string"
+          },
+          "is_anonymous": {
+            "title": "Is Anonymous",
+            "type": "boolean"
+          },
+          "is_minor": {
+            "title": "Is Minor",
+            "type": "boolean"
+          },
+          "load_shed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Load Shed"
+          },
+          "model_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Name"
+          },
+          "model_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Version"
+          },
+          "rev_id": {
+            "title": "Rev Id",
+            "type": "integer"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "threshold": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "used_fallback": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Used Fallback"
+          },
+          "wikipedia_url": {
+            "title": "Wikipedia Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rev_id",
+          "title",
+          "edited_at",
+          "is_minor",
+          "is_anonymous",
+          "comment",
+          "bytes_delta",
+          "score",
+          "model_name",
+          "model_version",
+          "threshold",
+          "used_fallback",
+          "load_shed",
+          "decision",
+          "content_hidden",
+          "wikipedia_url"
+        ],
+        "title": "EditSummary",
+        "type": "object"
+      },
+      "ExplainReply": {
+        "additionalProperties": false,
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "cached": {
+            "title": "Cached",
+            "type": "boolean"
+          },
+          "explanation": {
+            "title": "Explanation",
+            "type": "string"
+          },
+          "llm_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Llm Model"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "rev_id": {
+            "title": "Rev Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rev_id",
+          "explanation",
+          "available",
+          "cached",
+          "reason",
+          "llm_model"
+        ],
+        "title": "ExplainReply",
+        "type": "object"
+      },
+      "GateStatus": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "mine": {
+            "title": "Mine",
+            "type": "boolean"
+          },
+          "retry_after_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retry After Seconds"
+          },
+          "state": {
+            "enum": [
+              "free",
+              "in_use"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "enabled",
+          "state",
+          "retry_after_seconds",
+          "mine"
+        ],
+        "title": "GateStatus",
+        "type": "object"
+      },
+      "GuestSignIn": {
+        "additionalProperties": false,
+        "properties": {
+          "tab_id": {
+            "pattern": "^[A-Za-z0-9_-]{8,64}$",
+            "title": "Tab Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tab_id"
+        ],
+        "title": "GuestSignIn",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HealthSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "chain": {
+            "items": {
+              "$ref": "#/components/schemas/BreakerInfo"
+            },
+            "title": "Chain",
+            "type": "array"
+          },
+          "drift_reports": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Drift Reports",
+            "type": "array"
+          },
+          "fallback_rate_24h": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fallback Rate 24H"
+          },
+          "last_scored_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Scored At"
+          },
+          "live_metrics": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Live Metrics",
+            "type": "array"
+          },
+          "load_shed_rate_24h": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Load Shed Rate 24H"
+          },
+          "models_loaded": {
+            "title": "Models Loaded",
+            "type": "boolean"
+          },
+          "retrain_runs": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Retrain Runs",
+            "type": "array"
+          },
+          "scored_last_24h": {
+            "title": "Scored Last 24H",
+            "type": "integer"
+          },
+          "stale": {
+            "title": "Stale",
+            "type": "boolean"
+          },
+          "unscored_edits": {
+            "title": "Unscored Edits",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "stale",
+          "scored_last_24h",
+          "fallback_rate_24h",
+          "load_shed_rate_24h",
+          "last_scored_at",
+          "unscored_edits",
+          "models_loaded",
+          "chain",
+          "live_metrics",
+          "drift_reports",
+          "retrain_runs"
+        ],
+        "title": "HealthSummary",
+        "type": "object"
+      },
+      "Heartbeat": {
+        "additionalProperties": false,
+        "properties": {
+          "active": {
+            "default": false,
+            "title": "Active",
+            "type": "boolean"
+          }
+        },
+        "title": "Heartbeat",
+        "type": "object"
+      },
+      "HeartbeatReply": {
+        "additionalProperties": false,
+        "properties": {
+          "guest_seconds_left": {
+            "title": "Guest Seconds Left",
+            "type": "integer"
+          },
+          "lease_seconds": {
+            "title": "Lease Seconds",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "guest_seconds_left",
+          "lease_seconds"
+        ],
+        "title": "HeartbeatReply",
+        "type": "object"
+      },
+      "ModelEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "alias": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alias"
+          },
+          "feature_version": {
+            "title": "Feature Version",
+            "type": "integer"
+          },
+          "metrics": {
+            "additionalProperties": true,
+            "title": "Metrics",
+            "type": "object"
+          },
+          "model_name": {
+            "title": "Model Name",
+            "type": "string"
+          },
+          "model_version": {
+            "title": "Model Version",
+            "type": "string"
+          },
+          "registered_at": {
+            "format": "date-time",
+            "title": "Registered At",
+            "type": "string"
+          },
+          "snapshot_hash": {
+            "title": "Snapshot Hash",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model_name",
+          "model_version",
+          "alias",
+          "feature_version",
+          "snapshot_hash",
+          "metrics",
+          "registered_at"
+        ],
+        "title": "ModelEntry",
+        "type": "object"
+      },
+      "ModelList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ModelEntry"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "stale": {
+            "title": "Stale",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "stale"
+        ],
+        "title": "ModelList",
+        "type": "object"
+      },
+      "PredictReply": {
+        "additionalProperties": false,
+        "properties": {
+          "forced": {
+            "title": "Forced",
+            "type": "boolean"
+          },
+          "latency_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency Ms"
+          },
+          "model_name": {
+            "title": "Model Name",
+            "type": "string"
+          },
+          "model_version": {
+            "title": "Model Version",
+            "type": "string"
+          },
+          "score": {
+            "title": "Score",
+            "type": "number"
+          },
+          "source": {
+            "enum": [
+              "stored",
+              "cache",
+              "model"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "threshold": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold"
+          },
+          "used_fallback": {
+            "title": "Used Fallback",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "score",
+          "threshold",
+          "model_name",
+          "model_version",
+          "used_fallback",
+          "forced",
+          "latency_ms",
+          "source"
+        ],
+        "title": "PredictReply",
+        "type": "object"
+      },
+      "PredictRequest": {
+        "additionalProperties": false,
+        "description": "Either a known edit, which reads its stored score, or raw text to score now.",
+        "properties": {
+          "added_text": {
+            "default": "",
+            "maxLength": 20000,
+            "title": "Added Text",
+            "type": "string"
+          },
+          "comment": {
+            "default": "",
+            "maxLength": 1000,
+            "title": "Comment",
+            "type": "string"
+          },
+          "is_anonymous": {
+            "default": false,
+            "title": "Is Anonymous",
+            "type": "boolean"
+          },
+          "is_minor": {
+            "default": false,
+            "title": "Is Minor",
+            "type": "boolean"
+          },
+          "new_length": {
+            "default": 0,
+            "maximum": 100000000.0,
+            "minimum": 0.0,
+            "title": "New Length",
+            "type": "integer"
+          },
+          "old_length": {
+            "default": 0,
+            "maximum": 100000000.0,
+            "minimum": 0.0,
+            "title": "Old Length",
+            "type": "integer"
+          },
+          "removed_text": {
+            "default": "",
+            "maxLength": 20000,
+            "title": "Removed Text",
+            "type": "string"
+          },
+          "rev_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rev Id"
+          },
+          "user_edit_count": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Edit Count"
+          }
+        },
+        "title": "PredictRequest",
+        "type": "object"
+      },
+      "ReleaseSeat": {
+        "additionalProperties": false,
+        "description": "Sent by sendBeacon on pagehide, which can't set headers, so the token travels in the body.",
+        "properties": {
+          "csrf_token": {
+            "maxLength": 128,
+            "title": "Csrf Token",
+            "type": "string"
+          },
+          "tab_id": {
+            "pattern": "^[A-Za-z0-9_-]{8,64}$",
+            "title": "Tab Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tab_id",
+          "csrf_token"
+        ],
+        "title": "ReleaseSeat",
+        "type": "object"
+      },
+      "ReviewReply": {
+        "additionalProperties": false,
+        "properties": {
+          "decision": {
+            "enum": [
+              "vandalism",
+              "good_faith_mistake",
+              "ok",
+              "skip"
+            ],
+            "title": "Decision",
+            "type": "string"
+          },
+          "rev_id": {
+            "title": "Rev Id",
+            "type": "integer"
+          },
+          "updated": {
+            "title": "Updated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "rev_id",
+          "decision",
+          "updated"
+        ],
+        "title": "ReviewReply",
+        "type": "object"
+      },
+      "ReviewRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "decision": {
+            "enum": [
+              "vandalism",
+              "good_faith_mistake",
+              "ok",
+              "skip"
+            ],
+            "title": "Decision",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "required": [
+          "decision"
+        ],
+        "title": "ReviewRequest",
+        "type": "object"
+      },
+      "ScoreInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "alias": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alias"
+          },
+          "forced": {
+            "title": "Forced",
+            "type": "boolean"
+          },
+          "latency_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency Ms"
+          },
+          "load_shed": {
+            "title": "Load Shed",
+            "type": "boolean"
+          },
+          "model_name": {
+            "title": "Model Name",
+            "type": "string"
+          },
+          "model_version": {
+            "title": "Model Version",
+            "type": "string"
+          },
+          "score": {
+            "title": "Score",
+            "type": "number"
+          },
+          "scored_at": {
+            "format": "date-time",
+            "title": "Scored At",
+            "type": "string"
+          },
+          "threshold": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold"
+          },
+          "used_fallback": {
+            "title": "Used Fallback",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "model_name",
+          "model_version",
+          "alias",
+          "score",
+          "threshold",
+          "used_fallback",
+          "load_shed",
+          "forced",
+          "latency_ms",
+          "scored_at"
+        ],
+        "title": "ScoreInfo",
+        "type": "object"
+      },
+      "SessionInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "csrf_token": {
+            "title": "Csrf Token",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "fresh_explains_left": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fresh Explains Left"
+          },
+          "role": {
+            "enum": [
+              "guest",
+              "user"
+            ],
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "csrf_token",
+          "expires_at"
+        ],
+        "title": "SessionInfo",
+        "type": "object"
+      },
+      "UserSignIn": {
+        "additionalProperties": false,
+        "properties": {
+          "password": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Password",
+            "type": "string"
+          },
+          "tab_id": {
+            "pattern": "^[A-Za-z0-9_-]{8,64}$",
+            "title": "Tab Id",
+            "type": "string"
+          },
+          "take_over": {
+            "default": false,
+            "title": "Take Over",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "password",
+          "tab_id"
+        ],
+        "title": "UserSignIn",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "WikiGuard API",
+    "version": "1.0.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/v1/auth/guest": {
+      "post": {
+        "operationId": "sign_in_guest_v1_auth_guest_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuestSignIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionInfo"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sign In Guest",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/login": {
+      "post": {
+        "operationId": "sign_in_user_v1_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserSignIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionInfo"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sign In User",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/logout": {
+      "post": {
+        "operationId": "sign_out_v1_auth_logout_post",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Sign Out",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/me": {
+      "get": {
+        "description": "No seat needed: after a reload, the page needs its token before it can claim the seat.",
+        "operationId": "who_am_i_v1_auth_me_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionInfo"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Who Am I",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/edits/{rev_id}": {
+      "get": {
+        "operationId": "edit_detail_v1_edits__rev_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rev_id",
+            "required": true,
+            "schema": {
+              "title": "Rev Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Edit Detail",
+        "tags": [
+          "edits"
+        ]
+      }
+    },
+    "/v1/edits/{rev_id}/review": {
+      "put": {
+        "description": "PUT, because repeating it gives the same result: one review per edit (idempotent).",
+        "operationId": "review_edit_v1_edits__rev_id__review_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rev_id",
+            "required": true,
+            "schema": {
+              "title": "Rev Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewReply"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Review Edit",
+        "tags": [
+          "edits"
+        ]
+      }
+    },
+    "/v1/explain/{rev_id}": {
+      "post": {
+        "operationId": "explain_v1_explain__rev_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rev_id",
+            "required": true,
+            "schema": {
+              "title": "Rev Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExplainReply"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Explain",
+        "tags": [
+          "edits"
+        ]
+      }
+    },
+    "/v1/feed": {
+      "get": {
+        "operationId": "live_feed_v1_feed_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 256,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Live Feed",
+        "tags": [
+          "edits"
+        ]
+      }
+    },
+    "/v1/gate/claim": {
+      "post": {
+        "operationId": "claim_seat_v1_gate_claim_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClaimSeat"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Claim Seat",
+        "tags": [
+          "gate"
+        ]
+      }
+    },
+    "/v1/gate/heartbeat": {
+      "post": {
+        "operationId": "heartbeat_v1_gate_heartbeat_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Heartbeat"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HeartbeatReply"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Heartbeat",
+        "tags": [
+          "gate"
+        ]
+      }
+    },
+    "/v1/gate/release": {
+      "post": {
+        "operationId": "release_seat_v1_gate_release_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReleaseSeat"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Release Seat",
+        "tags": [
+          "gate"
+        ]
+      }
+    },
+    "/v1/gate/status": {
+      "get": {
+        "operationId": "gate_status_v1_gate_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GateStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Gate Status",
+        "tags": [
+          "gate"
+        ]
+      }
+    },
+    "/v1/health/summary": {
+      "get": {
+        "operationId": "health_summary_v1_health_summary_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health Summary",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/v1/models": {
+      "get": {
+        "operationId": "model_leaderboard_v1_models_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Model Leaderboard",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/v1/predict": {
+      "post": {
+        "operationId": "predict_v1_predict_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PredictRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PredictReply"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Predict",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/v1/queue": {
+      "get": {
+        "operationId": "review_queue_v1_queue_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "editor",
+            "required": false,
+            "schema": {
+              "default": "all",
+              "enum": [
+                "all",
+                "logged_out",
+                "registered"
+              ],
+              "title": "Editor",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 256,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_reviewed",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Reviewed",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Review Queue",
+        "tags": [
+          "edits"
+        ]
+      }
+    }
+  }
+}

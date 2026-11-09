@@ -241,6 +241,8 @@ node_modules/
 .next/
 # The Python template above ignores lib/, which would hide Next.js code
 !frontend/lib/
+# The app's code lives under src/ (Next.js src layout), so its lib/ needs the same exception.
+!frontend/src/lib/
 # Secrets, keeping the template file
 .env.*
 !.env.example

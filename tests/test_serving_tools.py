@@ -5,7 +5,9 @@ from pathlib import Path
 from typing import Any
 
 import eval_explain
+import export_pr_curves
 import hash_password
+import numpy as np
 import psycopg
 import pytest
 import sync_model_versions
@@ -107,7 +109,11 @@ def write_runs(root: Path) -> None:
                     "pr_auc": 0.36,
                     "snapshot_content_sha256": "snap",
                     "artifact_sha256": f"sha-{name}",
-                    "slices": {"not": "copied"},
+                    "slices": {
+                        "anonymous": {"rows": 10, "pr_auc": 0.5, "examples": ["edit text"]},
+                        "not": "copied",
+                    },
+                    "fit": {"seconds": 90, "history": ["not copied"]},
                 }
             ),
             "utf-8",
@@ -121,7 +127,20 @@ def test_read_runs_keeps_only_the_named_metrics(tmp_path: Path) -> None:
         ("roberta", "1", "champion"),
         ("mlp", "5", "fallback-1"),
     ]
-    assert rows[0]["metrics"].obj == {"pr_auc": 0.36}
+    # Model cards get counts and rates only: never row content, such as example edits.
+    assert rows[0]["metrics"].obj == {
+        "pr_auc": 0.36,
+        "card": {"slices": {"anonymous": {"rows": 10, "pr_auc": 0.5}}, "fit_minutes": 1.5},
+    }
+
+
+def test_read_runs_adds_the_pr_curve_when_exported(tmp_path: Path) -> None:
+    write_runs(tmp_path)
+    curve = {"points": [[0.5, 0.4], [1.0, 0.06]], "rows": 2, "rows_scored": 2}
+    (tmp_path / "roberta" / "pr_curve.json").write_text(json.dumps(curve), "utf-8")
+    rows = sync_model_versions.read_runs(tmp_path)
+    assert rows[0]["metrics"].obj["card"]["pr_curve"] == curve
+    assert "pr_curve" not in rows[1]["metrics"].obj["card"]
 
 
 @pytest.mark.integration
@@ -137,3 +156,11 @@ def test_syncing_twice_moves_aliases_without_duplicates(
     rows = db.execute("SELECT model_name, alias FROM model_versions ORDER BY model_name").fetchall()
     db.commit()
     assert rows == [("mlp", "champion"), ("roberta", None)]
+
+
+def test_pr_curve_points_take_the_first_point_at_each_percent_of_recall() -> None:
+    labels = np.array([1, 0, 1, 0, 0, 1, 0, 0, 0, 0])
+    scores = np.linspace(1.0, 0.1, labels.size)
+    points = export_pr_curves.curve_points(labels, scores, steps=3)
+    # Recall reaches 1/3 at the 1st edit, 2/3 at the 3rd, and 3/3 at the 6th.
+    assert points == [[0.3333, 1.0], [0.6667, 0.6667], [1.0, 0.5]]

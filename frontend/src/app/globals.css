@@ -1,0 +1,209 @@
+@import "tailwindcss";
+
+/*
+ * WikiGuard's look: an editor's desk. Warm paper in light mode, ink in dark, article titles in a
+ * book serif, data in a monospace, and one red "redline" for risk. Dark mode follows the system.
+ * Token names follow shadcn/ui, so its components drop in unchanged.
+ */
+
+:root {
+  --background: oklch(0.982 0.005 85);
+  --foreground: oklch(0.2 0.012 265);
+  --card: oklch(0.997 0.002 85);
+  --card-foreground: var(--foreground);
+  --muted: oklch(0.95 0.006 85);
+  --muted-foreground: oklch(0.45 0.014 265);
+  --border: oklch(0.895 0.008 85);
+  --input: oklch(0.86 0.01 85);
+  --ring: oklch(0.52 0.19 27);
+  --primary: oklch(0.24 0.014 265);
+  --primary-foreground: oklch(0.985 0.004 85);
+  --secondary: oklch(0.935 0.007 85);
+  --secondary-foreground: var(--foreground);
+  --accent: oklch(0.93 0.012 85);
+  --accent-foreground: var(--foreground);
+  --destructive: oklch(0.52 0.19 27);
+
+  /* Risk. Each is used with a word and a shape, never alone. Text values clear 4.5:1 on cards. */
+  --risk-flagged: oklch(0.52 0.19 27);
+  --risk-flagged-soft: oklch(0.52 0.19 27 / 0.1);
+  --risk-elevated: oklch(0.5 0.12 62);
+  --risk-elevated-soft: oklch(0.7 0.14 70 / 0.16);
+  --risk-low: oklch(0.5 0.025 250);
+  --risk-low-soft: oklch(0.5 0.025 250 / 0.09);
+
+  /* Proofreader's marks for the diff: struck for removed, underlined for added. */
+  --diff-removed: oklch(0.5 0.17 25);
+  --diff-removed-soft: oklch(0.6 0.17 25 / 0.08);
+  --diff-added: oklch(0.47 0.11 152);
+  --diff-added-soft: oklch(0.6 0.12 152 / 0.09);
+
+  --grid-dot: oklch(0.2 0.012 265 / 0.07);
+  --radius: 0.5rem;
+
+  /* One fixed color per model, wherever it appears (color follows the entity). Validated with
+     the dataviz validator against the card surface: worst adjacent CVD ΔE 17.6, normal 24.0.
+     Aqua and magenta sit below 3:1, so every chart has a legend and a table beside it. They
+     avoid red and amber, which mean risk here. */
+  --series-roberta: #2a78d6;
+  --series-distilbert: #1baf7a;
+  --series-bilstm: #6250d6;
+  --series-bert: #e87ba4;
+  --series-mlp: #008300;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: oklch(0.165 0.01 265);
+    --foreground: oklch(0.93 0.008 85);
+    --card: oklch(0.198 0.011 265);
+    --muted: oklch(0.235 0.012 265);
+    --muted-foreground: oklch(0.72 0.012 265);
+    --border: oklch(0.29 0.013 265);
+    --input: oklch(0.34 0.013 265);
+    --ring: oklch(0.7 0.17 27);
+    --primary: oklch(0.93 0.008 85);
+    --primary-foreground: oklch(0.18 0.01 265);
+    --secondary: oklch(0.255 0.012 265);
+    --accent: oklch(0.27 0.013 265);
+    --destructive: oklch(0.7 0.17 27);
+
+    --risk-flagged: oklch(0.72 0.17 27);
+    --risk-flagged-soft: oklch(0.72 0.17 27 / 0.14);
+    --risk-elevated: oklch(0.82 0.13 78);
+    --risk-elevated-soft: oklch(0.82 0.13 78 / 0.12);
+    --risk-low: oklch(0.72 0.03 250);
+    --risk-low-soft: oklch(0.72 0.03 250 / 0.1);
+
+    --diff-removed: oklch(0.74 0.15 25);
+    --diff-removed-soft: oklch(0.7 0.15 25 / 0.09);
+    --diff-added: oklch(0.78 0.13 152);
+    --diff-added-soft: oklch(0.72 0.13 152 / 0.08);
+
+    --grid-dot: oklch(0.93 0.008 85 / 0.05);
+
+    /* The same hues stepped for the dark card: worst adjacent CVD ΔE 13.0, all at least 3:1. */
+    --series-roberta: #3987e5;
+    --series-distilbert: #199e70;
+    --series-bilstm: #9085e9;
+    --series-bert: #d55181;
+    --series-mlp: #008300;
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+
+  --color-risk-flagged: var(--risk-flagged);
+  --color-risk-flagged-soft: var(--risk-flagged-soft);
+  --color-risk-elevated: var(--risk-elevated);
+  --color-risk-elevated-soft: var(--risk-elevated-soft);
+  --color-risk-low: var(--risk-low);
+  --color-risk-low-soft: var(--risk-low-soft);
+  --color-diff-removed: var(--diff-removed);
+  --color-diff-removed-soft: var(--diff-removed-soft);
+  --color-diff-added: var(--diff-added);
+  --color-diff-added-soft: var(--diff-added-soft);
+
+  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+  --font-display: var(--font-newsreader), ui-serif, Georgia, serif;
+
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 4px);
+
+  --animate-arrive: arrive 2.4s ease-out;
+  --animate-rise: rise 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  --animate-pulse-dot: pulse-dot 2s ease-in-out infinite;
+  --animate-shimmer: shimmer 1.6s linear infinite;
+
+  @keyframes arrive {
+    from {
+      background-color: var(--risk-elevated-soft);
+    }
+    to {
+      background-color: transparent;
+    }
+  }
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes pulse-dot {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 color-mix(in oklch, currentColor 45%, transparent);
+    }
+    50% {
+      box-shadow: 0 0 0 5px transparent;
+    }
+  }
+  @keyframes shimmer {
+    from {
+      background-position: -200% 0;
+    }
+    to {
+      background-position: 200% 0;
+    }
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    color-scheme: light dark;
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: "ss02";
+    /* A faint dot grid that fades out down the page: a desk, not a void. */
+    background-image: radial-gradient(var(--grid-dot) 1px, transparent 1px);
+    background-size: 22px 22px;
+    background-attachment: fixed;
+  }
+  ::selection {
+    background: color-mix(in oklch, var(--risk-flagged) 22%, transparent);
+  }
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-ring;
+  }
+  /* Tabular figures for every number column, so digits line up while they update. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
