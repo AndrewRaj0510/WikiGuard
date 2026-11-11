@@ -120,7 +120,9 @@ def train_final(
     seed: int,
     out: Path,
     label: str,
+    metadata_only: float | None = None,
 ) -> dict[str, Any]:
+    """metadata_only is the sanity run's score, read from data/runs when not given."""
     out.mkdir(parents=True, exist_ok=True)
     prepared = prepare(name, data, params, device, seed, cap)
     parameters = count_parameters(prepared.model)
@@ -184,7 +186,7 @@ def train_final(
         report["training_warnings"] = training_warnings(
             result.history,
             report["validation_pr_auc"],
-            _metadata_only_score(),
+            metadata_only if metadata_only is not None else _metadata_only_score(),
             report["parity"]["validation"]["passed"] and report["parity"]["test"]["passed"],
         )
         if name not in ("mlp", "bilstm"):

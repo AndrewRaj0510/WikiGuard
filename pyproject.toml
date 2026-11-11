@@ -53,6 +53,7 @@ pythonpath = [
     "services/api",
     "jobs/labeler",
     "jobs/retrain_poller",
+    "jobs/monitor",
     "jobs/purge",
     "jobs/retention",
     "jobs",

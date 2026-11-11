@@ -1,8 +1,8 @@
-"""Ask Wikipedia about every revision in a snapshot, and remove any it has since hidden.
+"""Ask Wikipedia about every revision in one snapshot, and remove any it has since hidden, by hand.
 
-Snapshots are public (DEC-043), so run this before each `dvc push`. Prints counts only. The daily
-purge job covers the archive and Postgres, and Phase 5 extends it to snapshots. Until then, this
-is the step that keeps a pushed snapshot clean. See README.md for clearing the old version.
+Snapshots are public (DEC-043), so run this before each `dvc push`. Prints counts only. Since
+Phase 5, jobs/purge/snapshots.py does this on a schedule for every published snapshot and the
+golden set, and pushes the result; this script stays for a one-off check by hand.
 
     python scripts/recheck_snapshot.py snapshots/NAME
 """

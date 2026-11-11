@@ -47,6 +47,9 @@ DIGEST_TAG = "artifact_sha256"
 NAME_TAG = "model_name"
 ARTIFACT_FOLDER = "model"
 MAX_FALLBACKS = 9
+CHAIN_ALIASES = ("champion", *(f"fallback-{index}" for index in range(1, MAX_FALLBACKS + 1)))
+# The model in its shadow period: scored on live edits, never served (PLAN.md, section 4).
+CANDIDATE_ALIAS = "candidate"
 MISSING_ALIAS_CODES = {"INVALID_PARAMETER_VALUE", "RESOURCE_DOES_NOT_EXIST"}
 HTTP_TIMEOUT_SECONDS = 60.0
 MAX_ARTIFACT_BYTES = 512 * 1024 * 1024
@@ -99,6 +102,8 @@ class ModelRef:
 class ModelSource(Protocol):
     def resolve(self) -> list[ModelRef]: ...
 
+    def resolve_alias(self, alias: str) -> ModelRef | None: ...
+
     def fetch(self, ref: ModelRef, target: Path) -> None: ...
 
 
@@ -148,25 +153,24 @@ class MlflowRegistry:
         version: dict[str, Any] = response.json()["model_version"]
         return version
 
+    def resolve_alias(self, alias: str) -> ModelRef | None:
+        version = self._version_for(alias)
+        if version is None:
+            return None
+        tags = {tag["key"]: tag["value"] for tag in version.get("tags", [])}
+        if DIGEST_TAG not in tags or NAME_TAG not in tags:
+            raise ChainError(f"{alias} has no recorded checksum or model name")
+        return ModelRef(
+            alias, tags[NAME_TAG], str(version["version"]), tags[DIGEST_TAG], version["run_id"]
+        )
+
     def resolve(self) -> list[ModelRef]:
         refs: list[ModelRef] = []
-        aliases = ["champion", *(f"fallback-{index}" for index in range(1, MAX_FALLBACKS + 1))]
-        for alias in aliases:
-            version = self._version_for(alias)
-            if version is None:
+        for alias in CHAIN_ALIASES:
+            ref = self.resolve_alias(alias)
+            if ref is None:
                 break
-            tags = {tag["key"]: tag["value"] for tag in version.get("tags", [])}
-            if DIGEST_TAG not in tags or NAME_TAG not in tags:
-                raise ChainError(f"{alias} has no recorded checksum or model name")
-            refs.append(
-                ModelRef(
-                    alias,
-                    tags[NAME_TAG],
-                    str(version["version"]),
-                    tags[DIGEST_TAG],
-                    version["run_id"],
-                )
-            )
+            refs.append(ref)
         if not refs:
             raise ChainError("the registry has no champion")
         return refs
@@ -201,25 +205,52 @@ class MlflowRegistry:
 
 
 class LocalRuns:
-    """The trainer's output folder, for Compose and tests, where no registry is needed."""
+    """The trainer's output folder, for Compose and tests, where no registry is needed.
+
+    aliases.json maps each alias to a model and version. An entry may name its own folder, relative
+    to the root, which a local registry with two versions of one model needs.
+    """
 
     def __init__(self, root: Path) -> None:
         self.root = root
 
+    def _aliases(self) -> dict[str, dict[str, Any]]:
+        aliases: dict[str, dict[str, Any]] = json.loads(
+            (self.root / ALIASES_FILE).read_text("utf-8")
+        )
+        return aliases
+
+    def _folder(self, entry: dict[str, Any]) -> Path:
+        return self.root / str(entry.get("folder", entry["model"])) / ARTIFACT_FOLDER
+
+    def _ref(self, alias: str, entry: dict[str, Any]) -> ModelRef:
+        return ModelRef(
+            alias,
+            entry["model"],
+            str(entry["version"]),
+            sha256_file(self._folder(entry) / CHECKSUMS_FILE),
+            entry.get("folder", entry["model"]),
+        )
+
+    def resolve_alias(self, alias: str) -> ModelRef | None:
+        entry = self._aliases().get(alias)
+        return None if entry is None else self._ref(alias, entry)
+
     def resolve(self) -> list[ModelRef]:
-        aliases = json.loads((self.root / ALIASES_FILE).read_text("utf-8"))
-        return [
-            ModelRef(
-                alias,
-                entry["model"],
-                str(entry["version"]),
-                sha256_file(self.root / entry["model"] / ARTIFACT_FOLDER / CHECKSUMS_FILE),
-            )
-            for alias, entry in aliases.items()
-        ]
+        aliases = self._aliases()
+        refs = []
+        # Serving order, whatever order the file lists them in. Other aliases, such as the
+        # candidate in shadow, aren't part of the chain.
+        for alias in CHAIN_ALIASES:
+            if alias not in aliases:
+                break
+            refs.append(self._ref(alias, aliases[alias]))
+        return refs
 
     def fetch(self, ref: ModelRef, target: Path) -> None:
-        shutil.copytree(self.root / ref.model_name / ARTIFACT_FOLDER, target, dirs_exist_ok=True)
+        # run_id holds the folder for a local source.
+        folder = self.root / (ref.run_id or ref.model_name) / ARTIFACT_FOLDER
+        shutil.copytree(folder, target, dirs_exist_ok=True)
 
 
 class ModelCache:
@@ -436,6 +467,84 @@ class ServingChain:
         thread = threading.Thread(target=run, name="alias-poll", daemon=True)
         thread.start()
         return thread
+
+
+class ShadowSlot:
+    """The candidate in its shadow period, loaded beside the chain and never part of it.
+
+    It has its own cache folder, because a chain reload prunes every folder it doesn't use. A
+    candidate that won't load just means no shadow scores, which the shadow check counts as a
+    failure: it never touches the chain that serves users.
+    """
+
+    def __init__(
+        self,
+        source: ModelSource,
+        cache: ModelCache,
+        timeout_ms: int,
+        loader: Loader | None = None,
+    ) -> None:
+        self._source = source
+        self._cache = cache
+        self._timeout_ms = timeout_ms
+        self._loader = loader or load_for_serving()
+        self._current: tuple[ModelRef, Predictor] | None = None
+        self._lock = threading.Lock()
+        self.last_error: str | None = None
+
+    @property
+    def current(self) -> tuple[ModelRef, Predictor] | None:
+        return self._current
+
+    def refresh(self) -> bool:
+        """Follow the candidate alias. Returns True if what's loaded changed."""
+        with self._lock:
+            try:
+                ref = self._source.resolve_alias(CANDIDATE_ALIAS)
+            except Exception as error:  # noqa: BLE001 - keep whatever is loaded
+                self.last_error = type(error).__name__
+                return False
+            current = self._current
+            if ref is None:
+                self._current = None
+                self.last_error = None
+                return current is not None
+            if current is not None and current[0] == ref:
+                return False
+            try:
+                folder = self._cache.ensure(ref, self._source)
+                model = self._loader(folder, ref.artifact_sha256)
+                smoke_check(ref.alias, ref.model_name, ref.version, model)
+            except Exception as error:  # noqa: BLE001 - a bad candidate gets no shadow scores
+                self._current = None
+                self.last_error = f"{ref.folder_name}: {type(error).__name__}"
+                logger.error("Shadow candidate didn't load: %s", self.last_error)
+                return current is not None
+            entry = ChainEntry(ref.alias, ref.model_name, ref.version, model)
+            # Nothing behind it, so a failure is reported as one, never covered by a fallback.
+            self._current = (ref, Predictor([entry], self._timeout_ms))
+            self._cache.prune([ref])
+            self.last_error = None
+            logger.info("Shadow candidate loaded: %s", ref.folder_name)
+            return True
+
+    def poll(self, interval_seconds: float, stop: threading.Event) -> threading.Thread:
+        def run() -> None:
+            while not stop.wait(interval_seconds):
+                self.refresh()
+
+        thread = threading.Thread(target=run, name="shadow-poll", daemon=True)
+        thread.start()
+        return thread
+
+
+def shadow_from_settings(settings: Any, loader: Loader | None = None) -> ShadowSlot:
+    return ShadowSlot(
+        source_from_settings(settings),
+        ModelCache(Path(f"{settings.model_cache_dir}-shadow")),
+        settings.predict_timeout_ms,
+        loader or load_for_serving(settings.onnx_threads),
+    )
 
 
 def source_from_settings(settings: Any) -> ModelSource:

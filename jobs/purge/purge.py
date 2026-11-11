@@ -19,7 +19,7 @@ from typing import Any
 
 import psycopg
 from psycopg.types.json import Jsonb
-from wikiguard_core.archive import purge_revisions
+from wikiguard_core.archive import purge_references, purge_revisions
 from wikiguard_core.config import (
     ArchiveSettings,
     CommonSettings,
@@ -111,6 +111,8 @@ def run(
     # Content in the archive goes too, whichever check found it.
     purged = sorted(state.rev_id for state in states)
     results["cleared_in_archive"] = purge_revisions(archive_root, set(purged))
+    # Drift reference samples hold edit text too, and outlive the 30-day archive.
+    results["removed_from_references"] = purge_references(archive_root, set(purged))
     if purged:
         connection.execute(
             "INSERT INTO audit_log (actor, action, details) VALUES ('purge', 'purge.hidden', %s)",

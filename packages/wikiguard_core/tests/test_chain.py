@@ -506,8 +506,31 @@ def test_local_runs_reads_the_trainers_aliases(tmp_path: Path) -> None:
     )
     source = LocalRuns(tmp_path / "runs")
     refs = source.resolve()
-    assert refs == [ModelRef("champion", "mlp", "5", digest)]
+    # A local source keeps the model's folder where the registry keeps its run.
+    assert refs == [ModelRef("champion", "mlp", "5", digest, "mlp")]
     assert (ModelCache(tmp_path / "cache").ensure(refs[0], source) / "config.json").is_file()
+
+
+def test_local_runs_orders_the_chain_and_keeps_the_candidate_out(tmp_path: Path) -> None:
+    for folder in ("mlp", "v7"):
+        make_artifact(tmp_path / "runs" / folder / "model")
+    (tmp_path / "runs" / "aliases.json").write_text(
+        json.dumps(
+            {
+                "fallback-1": {"version": 5, "model": "mlp"},
+                "candidate": {"version": 7, "model": "mlp", "folder": "v7"},
+                "champion": {"version": 6, "model": "mlp"},
+            }
+        ),
+        "utf-8",
+    )
+    source = LocalRuns(tmp_path / "runs")
+    assert [ref.alias for ref in source.resolve()] == ["champion", "fallback-1"]
+    candidate = source.resolve_alias("candidate")
+    assert candidate is not None and candidate.version == "7"
+    fetched = ModelCache(tmp_path / "cache").ensure(candidate, source)
+    assert (fetched / "config.json").is_file()
+    assert source.resolve_alias("fallback-9") is None
 
 
 def test_the_registry_address_is_required_for_the_mlflow_source(

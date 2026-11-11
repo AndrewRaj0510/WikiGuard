@@ -32,6 +32,7 @@ EXPECTED_TABLES = {
     "active_session",
     "sessions",
     "login_throttle",
+    "shadow_scores",
 }
 ROLES = {
     "wikiguard_api",
@@ -142,6 +143,15 @@ def add_edit(connection: psycopg.Connection, rev_id: int = 1) -> None:
         ("wikiguard_trainer", "DELETE FROM model_versions"),
         ("wikiguard_maintenance", "SELECT * FROM reviews"),
         ("wikiguard_maintenance", "DELETE FROM audit_log"),
+        # Shadow scores never reach the API, and the trainer only reads them (0004).
+        ("wikiguard_api", "SELECT * FROM shadow_scores"),
+        (
+            "wikiguard_trainer",
+            "INSERT INTO shadow_scores (rev_id, model_name, model_version, "
+            "score) VALUES (1, 'mlp', '9', 0.5)",
+        ),
+        ("wikiguard_trainer", "UPDATE reviews SET decision = 'ok'"),
+        ("wikiguard_scorer", "UPDATE shadow_scores SET score = 0"),
     ],
 )
 def test_roles_are_refused_outside_their_job(database: Config, role: str, statement: str) -> None:
@@ -159,6 +169,19 @@ def test_roles_are_refused_outside_their_job(database: Config, role: str, statem
         ("wikiguard_labeler", "INSERT INTO labels (rev_id, label) VALUES (1, 1)"),
         ("wikiguard_scorer", "UPDATE edits SET title = 'x'"),
         ("wikiguard_maintenance", "DELETE FROM edits"),
+        (
+            "wikiguard_scorer",
+            "INSERT INTO shadow_scores (rev_id, model_name, model_version, "
+            "score) VALUES (1, 'mlp', '9', 0.5)",
+        ),
+        # The monitor runs as the trainer role: reviewer precision, and asking for a retrain.
+        ("wikiguard_trainer", "SELECT * FROM reviews"),
+        ("wikiguard_trainer", "SELECT * FROM shadow_scores"),
+        (
+            "wikiguard_trainer",
+            "INSERT INTO retrain_requests (kind, reason, requested_by) "
+            "VALUES ('retrain', 'drift', 'monitor')",
+        ),
     ],
 )
 def test_roles_can_do_their_job_through_rls(database: Config, role: str, statement: str) -> None:
@@ -299,3 +322,12 @@ def test_the_api_role_can_use_sessions_but_the_scorer_cannot(database: Config) -
         as_role(connection, "wikiguard_scorer")
         with pytest.raises(psycopg.errors.InsufficientPrivilege):
             connection.execute("SELECT * FROM sessions")
+
+
+def test_a_shadow_check_is_a_request_kind_and_others_are_refused(database: Config) -> None:
+    with migrated(database) as connection:
+        connection.execute(
+            "INSERT INTO retrain_requests (kind, reason) VALUES ('shadow_check', 'over')"
+        )
+        with pytest.raises(psycopg.errors.CheckViolation):
+            connection.execute("INSERT INTO retrain_requests (kind, reason) VALUES ('drop', 'x')")

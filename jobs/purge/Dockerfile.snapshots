@@ -1,0 +1,23 @@
+# The weekly and daily snapshot purge, which needs git and DVC on top of the daily purge's tools.
+# Build from the repo root: docker build -f jobs/purge/Dockerfile.snapshots .
+# It works in its own clone of the repo, mounted at /repo (SNAPSHOT_REPO_PATH), never a laptop's
+# checkout, because dvc gc deletes every version the clone doesn't point at (DEC-070).
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Requirements come before code, so a code change doesn't reinstall everything.
+COPY jobs/purge/requirements.txt jobs/purge/requirements-snapshots.txt ./
+RUN pip install --no-cache-dir -r requirements-snapshots.txt
+
+COPY packages/wikiguard_core packages/wikiguard_core
+RUN pip install --no-cache-dir --no-deps ./packages/wikiguard_core
+COPY jobs/purge/snapshots.py .
+
+USER 10001
+ENV SNAPSHOT_REPO_PATH=/repo
+CMD ["python", "snapshots.py"]

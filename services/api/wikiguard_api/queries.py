@@ -167,6 +167,19 @@ def model_list(tx: Tx) -> list[dict[str, Any]]:
     )
 
 
+# Keys of retrain_runs.details the page doesn't use, removed in SQL so they never leave Supabase.
+RUN_DETAILS_DROPPED = (
+    "listings",
+    "slices",
+    "aliases_before",
+    "aliases_after",
+    "proposed_aliases",
+    "validation_warnings",
+    "storage",
+)
+RUN_DETAILS_KEPT = "".join(f" - '{key}'" for key in RUN_DETAILS_DROPPED)
+
+
 def health_summary(tx: Tx) -> dict[str, Any]:
     counts = tx.one(
         """
@@ -196,10 +209,12 @@ def health_summary(tx: Tx) -> dict[str, Any]:
         "drift_reports": tx.all(
             "SELECT created_at, drifted FROM drift_reports ORDER BY created_at DESC LIMIT 10"
         ),
-        # details holds the trainer's before vs after report, which the Health page shows.
+        # details holds the trainer's before vs after report, which the Health page shows. The
+        # trainer's own bookkeeping (model listings, slice tables, alias maps) stays behind:
+        # every byte read from Supabase counts against its 5 GB a month.
         "retrain_runs": tx.all(
-            "SELECT id, trigger, status, started_at, finished_at, details FROM retrain_runs "
-            "ORDER BY started_at DESC LIMIT 10"
+            f"SELECT id, trigger, status, started_at, finished_at, details {RUN_DETAILS_KEPT} "
+            "AS details FROM retrain_runs ORDER BY started_at DESC LIMIT 10"
         ),
     }
 

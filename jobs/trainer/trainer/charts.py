@@ -345,3 +345,68 @@ def latency(rows: Sequence[Mapping[str, Any]], folder: Path, day: date) -> Path:
     _axis_labels(axes, "Milliseconds", "")
     _legend(axes, "lower right")
     return _save(figure, folder, f"report_latency_{day}")
+
+
+def before_after(report: Mapping[str, Any], folder: Path, day: date, stem: str) -> Path:
+    """The serving champion against the retrain's best candidate, on the same test rows.
+
+    One bar per slice with an interval for the overall pair, so a model that only wins on one
+    slice is visible (PLAN.md, section 4).
+    """
+    before, after = report["before"], report["after"]
+    names = [
+        "overall",
+        *[
+            name
+            for name, pair in report["slices"].items()
+            if pair["before"].get("pr_auc") is not None
+        ],
+    ]
+    values: dict[str, list[float]] = {"before": [], "after": []}
+    for name in names:
+        for side in ("before", "after"):
+            if name == "overall":
+                values[side].append(report[side]["pr_auc"] or 0.0)
+            else:
+                values[side].append(report["slices"][name][side].get("pr_auc") or 0.0)
+    difference = report.get("difference")
+    subtitle = "PR-AUC on the newest test window"
+    if difference:
+        subtitle += (
+            f". Paired difference {difference['mean']:+.4f} "
+            f"(95% interval {difference['low']:+.4f} to {difference['high']:+.4f})"
+        )
+    figure, axes = _figure("Before vs after", subtitle)
+    positions = np.arange(len(names))
+    width = 0.38
+    for offset, side, model in ((-width / 2, "before", before), (width / 2, "after", after)):
+        label = (
+            f"{side.capitalize()}: {label_of(model['model'] or '')} v{model['version'] or 'new'}"
+        )
+        bars = axes.bar(
+            positions + offset,
+            values[side],
+            width,
+            label=label,
+            color=color_of(model["model"] or "") if side == "after" else MUTED,
+        )
+        axes.bar_label(bars, fmt="%.3f", fontsize=8, color=SECONDARY, padding=2)
+    for offset, model in ((-width / 2, before), (width / 2, after)):
+        interval = model.get("pr_auc_interval")
+        if interval:
+            axes.errorbar(
+                offset,
+                model["pr_auc"],
+                yerr=[[model["pr_auc"] - interval[0]], [interval[1] - model["pr_auc"]]],
+                color=INK,
+                capsize=4,
+                linewidth=1,
+            )
+    axes.set_xticks(positions, [name.replace("_", " ") for name in names])
+    top = max(*values["before"], *values["after"])
+    axes.set_ylim(0, 1.0 if top > 0.75 else top * 1.3)
+    _axis_labels(axes, "", "PR-AUC")
+    # Above the plot, so it never covers a tall bar.
+    figure.subplots_adjust(top=0.76)
+    axes.legend(loc="lower left", bbox_to_anchor=(0, 1.01), ncol=2, frameon=False, fontsize=9)
+    return _save(figure, folder, stem)

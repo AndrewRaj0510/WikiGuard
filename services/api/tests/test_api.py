@@ -841,6 +841,28 @@ def test_the_health_summary_carries_each_retrain_report(
     assert isinstance(run["id"], int)
 
 
+def test_the_trainers_bookkeeping_never_leaves_the_database(
+    guest: Browser, db: psycopg.Connection[Any]
+) -> None:
+    """Listings, slice tables, and alias maps stay behind, to spare Supabase's egress."""
+    details = {
+        "before": {"pr_auc": 0.36},
+        "reasons": ["drift"],
+        "gate": {"passed": False, "checks": []},
+        "listings": {"6": {"metrics": {"card": "large"}}},
+        "slices": {"anonymous": {}},
+        "aliases_before": {"champion": "1"},
+        "proposed_aliases": {"champion": "6"},
+    }
+    db.execute(
+        "INSERT INTO retrain_runs (trigger, status, details) VALUES ('drift', 'shadow', %s)",
+        (Jsonb(details),),
+    )
+    db.commit()
+    [run] = guest.get("/v1/health/summary").json()["retrain_runs"]
+    assert set(run["details"]) == {"before", "reasons", "gate"}
+
+
 # --- /predict ---
 
 

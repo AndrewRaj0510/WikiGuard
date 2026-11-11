@@ -5,7 +5,7 @@
 # The GPU build of PyTorch comes from its own index. mlflow-skinny, not mlflow, because full mlflow
 # 3.5.1 pins pyarrow below 22 (F-072), and 3.5.1 because that's what DagsHub's server reports (F-044).
 --extra-index-url https://download.pytorch.org/whl/cu126
--e packages/wikiguard_core[archive,serve]
+-e packages/wikiguard_core[archive,db,serve]
 -e jobs/trainer
 alembic==1.20.1
 dvc[s3]==3.67.1

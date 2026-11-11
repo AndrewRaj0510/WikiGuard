@@ -29,7 +29,13 @@ import psycopg
 from confluent_kafka import Consumer, KafkaException
 from prometheus_client import CollectorRegistry, Counter, Gauge, Histogram
 from pydantic import ValidationError
-from wikiguard_core.chain import SMOKE_EDIT, ServingChain, chain_from_settings
+from wikiguard_core.chain import (
+    SMOKE_EDIT,
+    ServingChain,
+    ShadowSlot,
+    chain_from_settings,
+    shadow_from_settings,
+)
 from wikiguard_core.config import (
     CommonSettings,
     ConfigError,
@@ -105,6 +111,15 @@ UPDATE_LATEST = """
         latest_scored_at = %(scored_at)s
     WHERE rev_id = %(rev_id)s
       AND (latest_scored_at IS NULL OR latest_scored_at <= %(scored_at)s)
+"""
+# A candidate's live scores during its shadow period. Their own table, so they never reach users.
+INSERT_SHADOW = """
+    INSERT INTO shadow_scores (
+        rev_id, model_name, model_version, score, error, latency_ms, served_score, scored_at
+    ) VALUES (
+        %(rev_id)s, %(model_name)s, %(model_version)s, %(score)s, %(error)s, %(latency_ms)s,
+        %(served_score)s, %(scored_at)s
+    ) ON CONFLICT (rev_id, model_version) DO NOTHING
 """
 SELECT_UNSCORED = """
     SELECT rev_id, parent_rev_id, schema_version, title, edited_at, is_minor, is_anonymous,
@@ -198,6 +213,15 @@ class Metrics:
         self.reload_failures = Gauge(
             "scorer_reload_failures", "Failed alias reloads", registry=self.registry
         )
+        self.shadow = Counter(
+            "scorer_shadow_scored",
+            "Edits the shadow candidate scored",
+            ["outcome"],
+            registry=self.registry,
+        )
+        self.shadow_loaded = Gauge(
+            "scorer_shadow_loaded", "1 while a candidate is in shadow", registry=self.registry
+        )
 
 
 def edit_from_row(row: Sequence[Any]) -> EditEvent:
@@ -255,6 +279,7 @@ class ScoringWorker:
     sleep: Callable[[float], None] = time.sleep
     metrics: Metrics = field(default_factory=Metrics)
     shedding: bool = False
+    shadow: ShadowSlot | None = None
     _connection: psycopg.Connection[Any] | None = None
     _last_lag_check: float = 0.0
     _last_rescore: float = 0.0
@@ -412,6 +437,8 @@ class ScoringWorker:
                         "score",
                         "used_fallback",
                         "scored_at",
+                        "threshold",
+                        "alias",
                     )
                 }
             )
@@ -457,6 +484,57 @@ class ScoringWorker:
                     logger.warning("Commit failed: %s", error)
             return
 
+    # --- Shadow ---
+
+    def shadow_rows(self, items: Sequence[Item]) -> list[dict[str, Any]]:
+        """The candidate scores each edit alone, like serving does, and failures are kept too.
+
+        Skipped while shedding load: the shadow must never slow down what users see.
+        """
+        loaded = self.shadow.current if self.shadow is not None else None
+        if loaded is None or self.shedding:
+            return []
+        ref, predictor = loaded
+        rows = []
+        for item in items:
+            if item.score is None:
+                continue
+            row: dict[str, Any] = {
+                "rev_id": item.edit.rev_id,
+                "model_name": ref.model_name,
+                "model_version": ref.version,
+                "score": None,
+                "error": None,
+                "latency_ms": None,
+                "served_score": item.score["score"],
+                "scored_at": datetime.now(UTC),
+            }
+            try:
+                prediction = predictor.score([item.features])
+            except AllModelsFailed as failure:
+                attempts = failure.attempts
+                row["error"] = str(attempts[-1].outcome) if attempts else "failed"
+                self.metrics.shadow.labels("error").inc()
+            else:
+                row["score"] = round(float(prediction.scores[0]), SCORE_DECIMALS)
+                row["latency_ms"] = prediction.latency_ms
+                self.metrics.shadow.labels("scored").inc()
+            rows.append(row)
+        return rows
+
+    def write_shadow(self, items: Sequence[Item]) -> None:
+        """Best effort, after the real write: a lost shadow score costs nothing but a sample."""
+        rows = self.shadow_rows(items)
+        if not rows:
+            return
+        try:
+            connection = self._db()
+            with connection.transaction(), connection.cursor() as cursor:
+                cursor.executemany(INSERT_SHADOW, rows)
+        except psycopg.Error as error:
+            self.metrics.shadow.labels("not_stored").inc(len(rows))
+            logger.warning("Shadow scores not stored: %s", type(error).__name__)
+
     # --- Rescoring ---
 
     def rescore_due(self) -> None:
@@ -493,6 +571,7 @@ class ScoringWorker:
         if messages:
             items = self.score(self._parse(messages))
             self.deliver(items)
+            self.write_shadow(items)
         self.rescore_due()
         self._export_chain_state()
 
@@ -502,6 +581,9 @@ class ScoringWorker:
                 int(status.breaker.value != "closed")
             )
         self.metrics.reload_failures.set(self.chain.reload_failures)
+        self.metrics.shadow_loaded.set(
+            int(self.shadow is not None and self.shadow.current is not None)
+        )
 
     def is_healthy(self) -> bool:
         if not self.chain.ready:
@@ -548,14 +630,18 @@ def main() -> int:
         settings.scorer_shed_lag,
         settings.scorer_rescore_seconds,
     )
+    # The cluster's scorer runs the shadow. Render's API never does: it has no room (DEC-050).
+    worker.shadow = shadow_from_settings(settings)
     serve_ops(settings.ops_port, worker.metrics.registry, worker.is_healthy)
 
     for name in (signal.SIGTERM, signal.SIGINT):
         signal.signal(name, lambda *_: worker.stop.set())
     # Models first: consuming with nothing to score with would only fill the unscored list.
     chain.load()
+    worker.shadow.refresh()
     if settings.model_poll_seconds:
         chain.poll(settings.model_poll_seconds, worker.stop)
+        worker.shadow.poll(settings.model_poll_seconds, worker.stop)
     consumer.subscribe([EDITS_RAW])
     while not worker.stop.is_set():
         worker.run_once()

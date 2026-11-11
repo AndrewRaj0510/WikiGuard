@@ -20,6 +20,9 @@ ROLES = (
     "wikiguard_maintenance",
 )
 TABLES = (
+    "shadow_scores",
+    "drift_reports",
+    "live_metrics",
     "audit_log",
     "sessions",
     "login_throttle",
@@ -42,7 +45,7 @@ def migrated_url(monkeypatch: pytest.MonkeyPatch) -> str:
     if not URL:
         pytest.skip("TEST_DATABASE_URL is not set")
     with psycopg.connect(URL, autocommit=True) as connection:
-        row = connection.execute("SELECT to_regclass('public.login_throttle')").fetchone()
+        row = connection.execute("SELECT to_regclass('public.shadow_scores')").fetchone()
         if row is not None and row[0] is not None:
             return URL
         connection.execute("DROP SCHEMA public CASCADE")

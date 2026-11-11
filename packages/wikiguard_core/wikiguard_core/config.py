@@ -136,8 +136,19 @@ class RetrainSettings(BaseConfig):
     retrain_interval_days: int = 7
     retrain_on_drift: bool = True
     retrain_startup_delay_seconds: int = Field(default=300, ge=0)
-    # What the retrain-request poller runs. Blank means requests are recorded as failed.
+    # What the retrain-request poller runs, with the request's kind and id added as arguments.
+    # Blank means requests are recorded as failed.
     trainer_command: str | None = None
+    # The CPU models only: BERT and RoBERTa need a GPU notebook run by hand (DEC-022).
+    retrain_models: str = "mlp,bilstm,distilbert"
+    # The whole run stops starting new models past this, and the poller kills it at 12 hours.
+    retrain_timeout_minutes: int = Field(default=600, gt=0)
+    # Leaves the rest of the VM's CPUs to the scorer, which must keep up with the stream.
+    retrain_threads: int = Field(default=2, gt=0)
+    retrain_snapshot_rows: int = Field(default=100_000, ge=1_000)
+    # How long a candidate scores live edits before the health gate. 24 in production; the
+    # simulation uses 0 because it replays the period.
+    shadow_hours: int = Field(default=24, ge=0)
 
     @field_validator("retrain_interval_days")
     @classmethod
@@ -145,6 +156,29 @@ class RetrainSettings(BaseConfig):
         if value not in {1, 7, 14}:
             raise ValueError("must be 1, 7, or 14")
         return value
+
+    @field_validator("retrain_models")
+    @classmethod
+    def check_cpu_models(cls, value: str) -> str:
+        names = [name.strip() for name in value.split(",") if name.strip()]
+        allowed = {"mlp", "bilstm", "distilbert"}
+        if not names or not set(names) <= allowed:
+            raise ValueError("must list only mlp, bilstm, and distilbert (DEC-022)")
+        return ",".join(names)
+
+    @property
+    def model_names(self) -> list[str]:
+        return self.retrain_models.split(",")
+
+
+class StorageSettings(BaseConfig):
+    # Where the DVC-tracked snapshots live: the repo checkout the job works in.
+    snapshot_repo_path: str = "."
+    # `dvc gc --cloud` deletes every version the checkout doesn't point at, locally too. Off unless
+    # the job runs in its own clone, so it can't delete the laptop's copy of old data (F-093).
+    snapshot_gc_enabled: bool = False
+    # Warn when DagsHub's storage passes this. Its limit isn't confirmed (F-071), so it's low.
+    storage_alert_bytes: int = Field(default=10 * 1024**3, gt=0)
 
 
 class WorkerSettings(BaseConfig):

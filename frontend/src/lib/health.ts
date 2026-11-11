@@ -1,7 +1,7 @@
 /**
  * Reading the Health summary's free-form parts. live_metrics, drift_reports, and retrain_runs are
- * written by the monitor and trainer (Phase 5), so each field is checked before use, and anything
- * malformed is skipped instead of breaking the page.
+ * written by the monitor and trainer (jobs/monitor, trainer.lifecycle), so each field is checked
+ * before use, and anything malformed is skipped instead of breaking the page.
  */
 import type { HealthSummary } from "./api/types";
 
@@ -45,6 +45,44 @@ export interface RetrainRun {
   startedAt: string;
   finishedAt: string | null;
   comparison: Comparison | null;
+  /** Why it ran: the monitor's trigger reasons, or the owner's reason for a manual one. */
+  reasons: string[];
+  /** Names of the promotion gate's failed checks, when the gate ran and failed. */
+  gateFailures: string[];
+  /** The version in its shadow period, while status is "shadow". */
+  candidateVersion: string | null;
+  shadowStartedAt: string | null;
+  /** True for the owner's manual override, which skips the gate. */
+  forced: boolean;
+  /** Section 4's post-promotion check, once the monitor has run it. */
+  postCheck: { due: boolean; rollback: boolean; reason: string } | null;
+  rolledBack: { at: string | null; reason: string | null; by: string | null } | null;
+}
+
+export type RunTone = "ok" | "warn" | "danger" | "outline";
+
+/** What each status the trainer writes means, in words, and how it's shown. */
+export function runStatus(status: string): { label: string; tone: RunTone } {
+  switch (status) {
+    case "promoted":
+      return { label: "Promoted", tone: "ok" };
+    case "done":
+      return { label: "Done", tone: "ok" };
+    case "shadow":
+      return { label: "In shadow", tone: "warn" };
+    case "not_promoted":
+      return { label: "Champion kept", tone: "outline" };
+    case "rejected":
+      return { label: "Rejected", tone: "danger" };
+    case "rolled_back":
+      return { label: "Rolled back", tone: "danger" };
+    case "failed":
+      return { label: "Failed", tone: "danger" };
+    case "running":
+      return { label: "Running", tone: "outline" };
+    default:
+      return { label: status.replaceAll("_", " "), tone: "outline" };
+  }
 }
 
 type Json = Record<string, unknown>;
@@ -105,17 +143,56 @@ export function driftReportsOf(summary: HealthSummary): DriftReport[] {
     .map((row) => ({ createdAt: row.created_at as string, drifted: row.drifted as boolean }));
 }
 
+const strings = (v: unknown): string[] =>
+  Array.isArray(v) ? v.filter((item): item is string => typeof item === "string" && !!item) : [];
+
+function gateFailuresOf(details: Json): string[] {
+  const gate = obj(details.gate);
+  if (gate.passed !== false || !Array.isArray(gate.checks)) return [];
+  return gate.checks
+    .map(obj)
+    .filter((check) => check.passed === false)
+    .map((check) => str(check.name))
+    .filter((name): name is string => name !== null);
+}
+
+function postCheckOf(details: Json): RetrainRun["postCheck"] {
+  const check = obj(details.post_check);
+  const reason = str(check.reason);
+  if (typeof check.rollback !== "boolean" || !reason) return null;
+  return { due: check.due === true, rollback: check.rollback, reason };
+}
+
 export function retrainRunsOf(summary: HealthSummary): RetrainRun[] {
   return summary.retrain_runs
     .filter((row) => typeof row.started_at === "string")
-    .map((row) => ({
-      id: num(row.id),
-      trigger: str(row.trigger) ?? "unknown",
-      status: str(row.status) ?? "unknown",
-      startedAt: row.started_at as string,
-      finishedAt: str(row.finished_at),
-      comparison: comparisonOf(row.details),
-    }));
+    .map((row) => {
+      const details = obj(row.details);
+      const reasons = strings(details.reasons);
+      const asked = str(details.reason);
+      const rolled = str(details.rolled_back_at);
+      return {
+        id: num(row.id),
+        trigger: str(row.trigger) ?? "unknown",
+        status: str(row.status) ?? "unknown",
+        startedAt: row.started_at as string,
+        finishedAt: str(row.finished_at),
+        comparison: comparisonOf(row.details),
+        reasons: reasons.length ? reasons : row.trigger === "manual" && asked ? [asked] : [],
+        gateFailures: gateFailuresOf(details),
+        candidateVersion:
+          details.candidate_version === undefined || details.candidate_version === null
+            ? null
+            : String(details.candidate_version),
+        shadowStartedAt: str(details.shadow_started_at),
+        forced: details.forced === true,
+        postCheck: postCheckOf(details),
+        rolledBack:
+          row.status === "rolled_back" || rolled
+            ? { at: rolled, reason: str(details.rollback_reason), by: str(details.rolled_back_by) }
+            : null,
+      };
+    });
 }
 
 export type HealthTone = "ok" | "warn" | "danger";

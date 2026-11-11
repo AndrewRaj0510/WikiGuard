@@ -261,9 +261,18 @@ def slice_masks(rows: Sequence[Mapping[str, Any]]) -> dict[str, NDArray[np.bool_
     Rows with no edit count fall in neither experience group, so on the backfill those two are
     empty, and the report says so instead of showing a number.
     """
-    anonymous = np.array([bool(row["is_anonymous"]) for row in rows])
-    buckets = np.array([int(row["user_edit_count_bucket"]) for row in rows])
-    delta = np.array([abs(int(row["bytes_delta"])) for row in rows])
+    return masks_from_columns(
+        np.array([bool(row["is_anonymous"]) for row in rows], dtype=bool),
+        np.array([int(row["user_edit_count_bucket"]) for row in rows], dtype=np.int64),
+        np.array([int(row["bytes_delta"]) for row in rows], dtype=np.int64),
+    )
+
+
+def masks_from_columns(
+    anonymous: NDArray[np.bool_], buckets: NDArray[np.int64], bytes_delta: NDArray[np.int64]
+) -> dict[str, NDArray[np.bool_]]:
+    """The same slices from columns, so live monitoring reads them exactly as evaluation does."""
+    delta = np.abs(bytes_delta)
     return {
         "anonymous": anonymous,
         "registered": ~anonymous,

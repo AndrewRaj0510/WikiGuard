@@ -17,7 +17,7 @@ from scorer import (
     ScoringWorker,
 )
 from wikiguard_core.artifacts import write_checksums
-from wikiguard_core.chain import ModelCache, ModelRef, ServingChain
+from wikiguard_core.chain import ModelCache, ModelRef, ServingChain, ShadowSlot
 from wikiguard_core.features import FEATURE_VERSION
 from wikiguard_core.kafka import EDITS_DLQ, EDITS_SCORED, PublishError
 from wikiguard_core.schemas import ScoreRecord
@@ -146,6 +146,14 @@ class FakeSource:
     def resolve(self) -> list[ModelRef]:
         return self.refs
 
+    candidate: ModelRef | None = None
+
+    def resolve_alias(self, alias: str) -> ModelRef | None:
+        return self.candidate if alias == "candidate" else None
+
+    def add_candidate(self, name: str) -> None:
+        self.candidate = ModelRef("candidate", name, "9", self._artifact(name))
+
     def fetch(self, ref: ModelRef, target: Path) -> None:
         for path in (self.tmp_path / "store" / ref.model_name).iterdir():
             (target / path.name).write_bytes(path.read_bytes())
@@ -153,9 +161,21 @@ class FakeSource:
 
 class Harness:
     def __init__(self, tmp_path: Path, url: str | None = None) -> None:
-        self.models = {"roberta": FakeModel(0.8), "bilstm": FakeModel(0.5), "mlp": FakeModel(0.2)}
+        self.models = {
+            "roberta": FakeModel(0.8),
+            "bilstm": FakeModel(0.5),
+            "mlp": FakeModel(0.2),
+            "distilbert": FakeModel(0.6),
+        }
+        self.source = FakeSource(tmp_path, ["roberta", "bilstm", "mlp"])
+        self.shadow = ShadowSlot(
+            self.source,
+            ModelCache(tmp_path / "cache-shadow"),
+            5000,
+            loader=lambda folder, _: self.models[folder.name.split("-")[0]],
+        )
         self.chain = ServingChain(
-            FakeSource(tmp_path, list(self.models)),
+            self.source,
             ModelCache(tmp_path / "cache"),
             5000,
             loader=lambda folder, _: self.models[folder.name.split("-")[0]],
@@ -176,6 +196,7 @@ class Harness:
             self.connect,
             clock=lambda: self.now,
             sleep=self.sleep_for,
+            shadow=self.shadow,
         )
 
     def connect(self) -> psycopg.Connection[Any]:
@@ -457,7 +478,10 @@ def test_rescoring_leaves_edits_with_no_text_and_very_new_ones(
     for model in live.models.values():
         model.fail = True
     old = (NOW - timedelta(minutes=10)).isoformat()
-    live.feed(edit_json(1), edit_json(2, timestamp=old))
+    # Taken now, not from NOW: in a long suite, an edit stamped at import is no longer "very new"
+    # by the time this runs (F-123).
+    fresh = datetime.now(UTC).isoformat()
+    live.feed(edit_json(1, timestamp=fresh), edit_json(2, timestamp=old))
     live.worker.run_once()
     db.execute("UPDATE edits SET added_text = NULL WHERE rev_id = 2")
     db.commit()
@@ -557,3 +581,85 @@ def test_metrics_report_breakers_and_scores(harness: Harness) -> None:
 
 def test_the_stop_event_is_a_real_event(harness: Harness) -> None:
     assert isinstance(harness.worker.stop, threading.Event)
+
+
+# --- Shadow ---
+
+
+def test_no_candidate_means_no_shadow_scores(harness: Harness) -> None:
+    harness.shadow.refresh()
+    harness.feed(edit_json(1))
+    items = harness.worker.score(harness.worker._parse(harness.consumer.messages))
+    assert harness.worker.shadow_rows(items) == []
+
+
+def test_a_candidate_scores_every_edit_without_changing_the_served_score(
+    harness: Harness,
+) -> None:
+    harness.source.add_candidate("distilbert")
+    assert harness.shadow.refresh()
+    harness.feed(edit_json(1), edit_json(2))
+    items = harness.worker.score(harness.worker._parse(harness.consumer.messages))
+    shadow = harness.worker.shadow_rows(items)
+    assert [row["score"] for row in shadow] == [pytest.approx(0.6)] * 2
+    assert [row["served_score"] for row in shadow] == [pytest.approx(0.8)] * 2
+    assert {row["model_version"] for row in shadow} == {"9"}
+    # What users get still comes from the chain.
+    assert all(item.score is not None and item.score["model_name"] == "roberta" for item in items)
+
+
+def test_a_failing_candidate_is_recorded_as_errors(harness: Harness) -> None:
+    harness.source.add_candidate("distilbert")
+    harness.shadow.refresh()
+    harness.models["distilbert"].fail = True
+    harness.feed(edit_json(1))
+    items = harness.worker.score(harness.worker._parse(harness.consumer.messages))
+    shadow = harness.worker.shadow_rows(items)
+    assert shadow[0]["score"] is None and shadow[0]["error"] == "failed"
+    assert items[0].score is not None and items[0].score["model_name"] == "roberta"
+
+
+def test_no_shadow_while_shedding_load(harness: Harness) -> None:
+    harness.source.add_candidate("distilbert")
+    harness.shadow.refresh()
+    harness.worker.shedding = True
+    harness.feed(edit_json(1))
+    items = harness.worker.score(harness.worker._parse(harness.consumer.messages))
+    assert harness.worker.shadow_rows(items) == []
+
+
+def test_a_candidate_that_wont_load_gives_no_shadow_and_the_chain_serves(
+    harness: Harness,
+) -> None:
+    harness.source.add_candidate("distilbert")
+    harness.models["distilbert"].fail = True  # the smoke check fails
+    assert not harness.shadow.refresh()
+    assert harness.shadow.current is None and harness.shadow.last_error
+    harness.feed(edit_json(1))
+    items = harness.worker.score(harness.worker._parse(harness.consumer.messages))
+    assert items[0].score is not None
+
+
+def test_removing_the_alias_ends_the_shadow(harness: Harness) -> None:
+    harness.source.add_candidate("distilbert")
+    harness.shadow.refresh()
+    harness.source.candidate = None
+    assert harness.shadow.refresh()
+    assert harness.shadow.current is None
+
+
+@pytest.mark.integration
+def test_shadow_scores_go_to_their_own_table(live: Harness, db: psycopg.Connection[Any]) -> None:
+    live.source.add_candidate("distilbert")
+    live.shadow.refresh()
+    live.feed(edit_json(1), edit_json(2))
+    live.worker.run_once()
+    assert rows(
+        db, "SELECT rev_id, model_version, score, served_score FROM shadow_scores ORDER BY 1"
+    ) == [
+        (1, "9", pytest.approx(0.6), pytest.approx(0.8)),
+        (2, "9", pytest.approx(0.6), pytest.approx(0.8)),
+    ]
+    # The queue reads scores and edits.latest_score, which only the chain writes.
+    assert rows(db, "SELECT DISTINCT model_version FROM scores") == [("1",)]
+    assert rows(db, "SELECT DISTINCT latest_score FROM edits") == [(pytest.approx(0.8),)]

@@ -82,6 +82,9 @@ class ScoreRecord(BaseModel):
     score: float
     used_fallback: bool = False
     scored_at: datetime
+    # The monitor needs these to measure alert rates and false positives from the archive.
+    threshold: float | None = None
+    alias: str | None = None
 
 
 class LabelRecord(BaseModel):

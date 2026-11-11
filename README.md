@@ -2,7 +2,7 @@
 
 A live Wikipedia vandalism detector, designed as a production-style MLOps system that runs entirely on free services.
 
-> **Status: Phase 2 models trained and evaluated.** Five models are trained on a versioned dataset of about 95,000 edits, and the data pipeline runs on a laptop, with live edits going through Redpanda to a parquet archive. Phase 3's scorer and API are built, and the whole pipeline runs locally in Docker Compose against recorded Wikipedia data. Phase 4's Next.js app is built and tested locally: the live feed, review queue, edit pages with Explain and review, model and health pages, sign-in, and the single-seat gate. Nothing is deployed, and Explain hasn't been measured against a real LLM. Model results are from a held-out test window, not live traffic. This README is updated as each phase finishes.
+> **Status: Phase 2 models trained and evaluated.** Five models are trained on a versioned dataset of about 95,000 edits, and the data pipeline runs on a laptop, with live edits going through Redpanda to a parquet archive. Phase 3's scorer and API are built, and the whole pipeline runs locally in Docker Compose against recorded Wikipedia data. Phase 4's Next.js app is built and tested locally: the live feed, review queue, edit pages with Explain and review, model and health pages, sign-in, and the single-seat gate. Phase 5's monitoring and continuous training are built: a daily monitor with drift checks, a retraining pipeline with a promotion gate, shadow scoring, promotion, and rollback. They were shown working on replayed data in a sandbox, not on live traffic. Nothing is deployed, and Explain hasn't been measured against a real LLM. Model results are from a held-out test window, not live traffic. This README is updated as each phase finishes.
 
 ## What it will do
 
@@ -101,7 +101,7 @@ The app screenshots use the real models and their measured results, with recorde
 | 2 | Train and evaluate five models | Trained, evaluated, and registered on DagsHub; ARM benchmarks still open |
 | 3 | Serving, API, and Explain | Built and tested locally. Not deployed, and Explain not yet measured on a real LLM |
 | 4 | Frontend | Built and tested locally. The Vercel deploy waits on the owner's account |
-| 5 | Monitoring and continuous training | Not started |
+| 5 | Monitoring and continuous training | Built and tested locally. Drift-to-promotion and label poisoning replayed on real data in a sandbox; the rollback replay and anything live are still to run |
 | 6 | CI/CD and security | Not started |
 | 7 | Kubernetes and deployment | Not started |
 | 8 | Production hardening | Not started |
@@ -190,7 +190,7 @@ $token = Read-Host "DagsHub token"
 
 If the push can't reach DagsHub, copy the endpoint from the repo's Remote button. Run the `Read-Host` line on its own: if you paste all the lines together, PowerShell takes the next line as the token.
 
-**If Wikipedia hides a revision**, the public copy has to change too. The recheck removes the row locally, and then the old version must be deleted from DagsHub:
+**If Wikipedia hides a revision**, the public copy has to change too. Since Phase 5, `jobs/purge/snapshots.py` does the recheck, rewrite, and push on a schedule (daily from the deletion log, `--full` weekly), for every snapshot and the golden set. You then commit and push the changed `.dvc` files, and its next run deletes the old version, if `SNAPSHOT_GC_ENABLED` is on in its own clone (DEC-070). By hand:
 
 ```powershell
 .venv\Scripts\python scripts\recheck_snapshot.py snapshots\NAME
@@ -198,6 +198,22 @@ If the push can't reach DagsHub, copy the endpoint from the repo's Remote button
 .venv-train\Scripts\dvc push
 .venv-train\Scripts\dvc gc --workspace --cloud    # deletes everything the current pointers don't use, including local cached versions
 ```
+
+### Monitoring and continuous training (Phase 5)
+
+Every change to what serves goes one way: the monitor or the owner adds a `retrain_requests` row, and the poller runs `TRAINER_COMMAND` with the request's kind and id (DEC-071). In the cluster these are CronJobs (Phase 7). By hand:
+
+```powershell
+.venv\Scripts\python jobs\monitor\monitor.py                         # daily; Evidently needs the trainer's environment
+.venv\Scripts\python jobs\retrain_poller\poller.py                   # with TRAINER_COMMAND=python -m trainer.lifecycle
+.venv-train\Scripts\python -m trainer.lifecycle retrain --request 12 --run 4
+.venv-train\Scripts\python -m trainer.storage                          # retention, report only; --apply deletes
+.venv-train\Scripts\python -m trainer.reference snapshots\NAME --version 1 --model-folder data\runs\roberta\model
+```
+
+Settings: `RETRAIN_INTERVAL_DAYS` (1, 7, or 14), `RETRAIN_ON_DRIFT`, `RETRAIN_STARTUP_DELAY_SECONDS`, `RETRAIN_MODELS` (CPU models only, DEC-022), `RETRAIN_TIMEOUT_MINUTES`, `RETRAIN_THREADS`, `SHADOW_HOURS`, `SNAPSHOT_GC_ENABLED`, and `STORAGE_ALERT_BYTES`, all in `.env.example`. Migration 0004 adds `shadow_scores`, so run the migrations again.
+
+To replay the loops in a sandbox, against a throwaway Postgres (never Supabase): `.venv-train\Scripts\python scripts\simulate_continuous_training.py drift --admin-url postgresql://USER:PASSWORD@127.0.0.1:5434/postgres`. The other scenarios are `poisoning` and `rollback`. It reads no `.env`, and only reads `data/runs`.
 
 ### Training and evaluation
 

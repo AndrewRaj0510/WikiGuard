@@ -19,6 +19,7 @@ import {
   healthSignals,
   liveMetricsOf,
   retrainRunsOf,
+  runStatus,
   type RetrainRun,
 } from "@/lib/health";
 import { aliasLabel, modelLabel } from "@/lib/models";
@@ -271,25 +272,78 @@ function RetrainHistory({ runs }: { runs: RetrainRun[] }) {
         </EmptyState>
       ) : (
         <ul className="divide-y">
-          {runs.map((run) => (
-            <li key={`${run.id}-${run.startedAt}`} className="py-3 text-[13.5px]">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span>
-                  <span className="font-medium capitalize">{run.trigger.replaceAll("_", " ")}</span>{" "}
-                  <time dateTime={run.startedAt} className="text-muted-foreground">
-                    {absoluteTime(run.startedAt)}
-                  </time>
-                </span>
-                <Chip tone={run.status === "promoted" || run.status === "done" ? "ok" : run.status === "failed" ? "danger" : "outline"}>
-                  {run.status}
-                </Chip>
-              </div>
-              {run.comparison && <BeforeAfter run={run} />}
-            </li>
-          ))}
+          {runs.map((run) => {
+            const status = runStatus(run.status);
+            return (
+              <li key={`${run.id}-${run.startedAt}`} className="py-3 text-[13.5px]">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span>
+                    <span className="font-medium capitalize">{triggerLabel(run.trigger)}</span>{" "}
+                    <time dateTime={run.startedAt} className="text-muted-foreground">
+                      {absoluteTime(run.startedAt)}
+                    </time>
+                  </span>
+                  <Chip tone={status.tone}>{status.label}</Chip>
+                </div>
+                <RunNotes run={run} />
+                {run.comparison && <BeforeAfter run={run} />}
+              </li>
+            );
+          })}
         </ul>
       )}
     </Panel>
+  );
+}
+
+const TRIGGERS: Record<string, string> = {
+  manual: "Manual retrain",
+  manual_promote: "Manual promotion",
+  schedule: "Scheduled retrain",
+  drift: "Drift",
+  performance: "Performance drop",
+};
+
+function triggerLabel(trigger: string): string {
+  return TRIGGERS[trigger] ?? trigger.replaceAll("_", " ");
+}
+
+/** Why a run happened and what came after it. Every line is text the trainer or monitor wrote. */
+function RunNotes({ run }: { run: RetrainRun }) {
+  const notes: { key: string; text: string; strong?: boolean }[] = [];
+  if (run.reasons.length) notes.push({ key: "why", text: `Why: ${run.reasons.join("; ")}.` });
+  if (run.forced) notes.push({ key: "forced", text: "A manual override: the gate was skipped, the artifact checks weren’t." });
+  if (run.status === "shadow" && run.candidateVersion) {
+    notes.push({
+      key: "shadow",
+      text: `Version ${run.candidateVersion} is scoring live edits with no effect on users${
+        run.shadowStartedAt ? ` since ${absoluteTime(run.shadowStartedAt)}` : ""
+      }. It’s promoted only if the shadow check passes.`,
+    });
+  }
+  if (run.gateFailures.length) {
+    notes.push({ key: "gate", text: `Promotion gate failed: ${run.gateFailures.map((name) => name.replaceAll("_", " ")).join(", ")}.` });
+  }
+  if (run.postCheck) {
+    notes.push({ key: "post", text: `Post-promotion check: ${run.postCheck.reason}.`, strong: run.postCheck.rollback });
+  }
+  if (run.rolledBack) {
+    const { at, reason, by } = run.rolledBack;
+    notes.push({
+      key: "rollback",
+      text: `Rolled back${at ? ` ${absoluteTime(at)}` : ""}${by ? ` by ${by === "monitor" ? "the monitor" : "the owner"}` : ""}${reason ? `: ${reason}` : ""}.`,
+      strong: true,
+    });
+  }
+  if (!notes.length) return null;
+  return (
+    <ul className="mt-1.5 space-y-0.5 text-[12.5px] text-muted-foreground">
+      {notes.map((note) => (
+        <li key={note.key} className={cn(note.strong && "font-medium text-foreground")}>
+          {note.text}
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -381,12 +435,12 @@ const ADMIN_TEXT: Record<AdminKind, { title: string; help: string; button: strin
   },
   promote: {
     title: "Promote a version",
-    help: "Recorded now, and carried out once the Phase 5 promotion gate exists (DEC-059).",
+    help: "Makes this version champion, skipping the gate but never the checksum and smoke test. Your reason goes in the audit log.",
     button: "Request promotion",
   },
   rollback: {
     title: "Roll back",
-    help: "Recorded now, and carried out once the Phase 5 promotion gate exists (DEC-059).",
+    help: "Puts back the chain from before the newest promotion. The cluster carries it out, and serving picks it up within 5 minutes.",
     button: "Request rollback",
   },
 };
@@ -510,7 +564,7 @@ function RecentRequests() {
           {items.slice(0, 8).map((item) => (
             <li key={item.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
               <span>
-                <span className="font-medium capitalize">{item.kind}</span>{" "}
+                <span className="font-medium capitalize">{item.kind.replaceAll("_", " ")}</span>{" "}
                 <span className="text-muted-foreground">“{item.reason}”</span>
               </span>
               <span className="flex items-center gap-2">

@@ -113,6 +113,12 @@ test.describe("models and health", () => {
     await expect(page.getByRole("heading", { name: /RoBERTa/ })).toBeVisible();
     await page.getByRole("link", { name: "Health" }).first().click();
     await expect(page.getByText("Not promoted. The interval includes zero.")).toBeVisible();
+    // Retrain history: why each run happened, a candidate in shadow, and a rollback.
+    await expect(page.getByText("In shadow", { exact: true })).toBeVisible();
+    await expect(page.getByText("Why: 40% of metadata features drifted.")).toBeVisible();
+    await expect(page.getByText(/^Version 7 is scoring live edits/)).toBeVisible();
+    await expect(page.getByText("Rolled back", { exact: true })).toBeVisible();
+    await expect(page.getByText(/^Rolled back .* by the monitor: post-promotion check/)).toBeVisible();
     await expect(page.getByRole("button", { name: "Request a retrain" })).toBeDisabled();
   });
 

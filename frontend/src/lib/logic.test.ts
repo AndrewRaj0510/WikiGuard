@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { HealthSummary, ModelEntry } from "./api/types";
-import { comparisonOf, healthSignals, retrainRunsOf } from "./health";
+import { comparisonOf, healthSignals, retrainRunsOf, runStatus } from "./health";
 import { neighbour } from "./list-order";
 import { aliasLabel, chainRank, statsOf } from "./models";
 import { contentSecurityPolicy, INDEXABLE_PATHS, newNonce } from "./security/headers";
@@ -130,6 +130,62 @@ describe("before vs after reports", () => {
     );
     expect(runs).toHaveLength(1);
     expect(runs[0]).toMatchObject({ trigger: "manual", comparison: null });
+  });
+
+  it("reads why a run happened and what came after", () => {
+    const [shadow, rolled] = retrainRunsOf(
+      summary({
+        retrain_runs: [
+          {
+            id: 3,
+            trigger: "drift",
+            status: "shadow",
+            started_at: "2026-11-09T04:00:00Z",
+            details: {
+              reasons: ["40% of metadata features drifted", 7],
+              candidate_version: 7,
+              shadow_started_at: "2026-11-09T05:00:00Z",
+              gate: { passed: false, checks: [{ name: "latency", passed: false }, { name: "size", passed: true }] },
+            },
+          },
+          {
+            id: 2,
+            trigger: "manual",
+            status: "rolled_back",
+            started_at: "2026-11-08T04:00:00Z",
+            details: {
+              reason: "weekly check",
+              forced: true,
+              rolled_back_at: "2026-11-08T05:00:00Z",
+              rollback_reason: "worse live",
+              rolled_back_by: "monitor",
+              post_check: { due: true, rollback: true, reason: "rolled back: 0.30 against 0.36" },
+            },
+          },
+        ],
+      }),
+    );
+    expect(shadow).toMatchObject({
+      reasons: ["40% of metadata features drifted"],
+      candidateVersion: "7",
+      gateFailures: ["latency"],
+      forced: false,
+      postCheck: null,
+      rolledBack: null,
+    });
+    expect(rolled).toMatchObject({
+      reasons: ["weekly check"],
+      forced: true,
+      postCheck: { due: true, rollback: true, reason: "rolled back: 0.30 against 0.36" },
+      rolledBack: { at: "2026-11-08T05:00:00Z", reason: "worse live", by: "monitor" },
+    });
+  });
+
+  it("names every status the trainer writes, never by color alone", () => {
+    expect(runStatus("shadow")).toEqual({ label: "In shadow", tone: "warn" });
+    expect(runStatus("not_promoted").label).toBe("Champion kept");
+    expect(runStatus("rolled_back").tone).toBe("danger");
+    expect(runStatus("something_new")).toEqual({ label: "something new", tone: "outline" });
   });
 });
 
