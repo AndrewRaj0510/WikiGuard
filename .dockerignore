@@ -1,0 +1,11 @@
+# Only what the Dockerfiles copy is sent to Docker. Everything else stays out, which keeps builds
+# fast (data/ and the virtual environments are many GB) and keeps .env out of every image.
+*
+!requirements-build.txt
+!packages/wikiguard_core
+!services
+!jobs
+**/__pycache__
+**/tests
+**/*.egg-info
+**/.pytest_cache

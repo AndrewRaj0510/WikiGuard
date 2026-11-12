@@ -1,0 +1,15 @@
+# OWASP ZAP baseline rules (.github/workflows/security-scan.yml). Tab-separated: id, action, note.
+# The baseline only watches ordinary page loads; it attacks nothing. By default every finding is
+# a warning. The ones below are controls this project promises (docs/PLAN.md, section 8), so
+# losing one fails the scan. Everything else is reported and read by a person.
+10020	FAIL	Anti-clickjacking header missing
+10021	FAIL	X-Content-Type-Options header missing
+10035	FAIL	Strict-Transport-Security header not set
+10038	FAIL	Content Security Policy header not set
+10055	FAIL	CSP is set but weak (wildcards, unsafe-inline)
+10010	FAIL	Cookie without HttpOnly
+10011	FAIL	Cookie without Secure
+10054	FAIL	Cookie without SameSite
+10023	FAIL	Debug error messages disclosed
+10098	FAIL	Cross-domain misconfiguration (CORS)
+90022	FAIL	Application error disclosed

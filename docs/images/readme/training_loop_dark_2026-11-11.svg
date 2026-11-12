@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 970 396" width="970" height="396" role="img" aria-labelledby="t d">
+<title id="t">WikiGuard continuous-training loop</title>
+<desc id="d">Each edit is scored and queued. The community reverts or keeps it, and its label is final at 48 hours. A daily monitor computes live metrics and drift. Drift, decaying accuracy, or the schedule start a retrain on a new snapshot. The promotion gate checks the candidate with a paired bootstrap, the golden set, and slices. If it fails, the champion stays. If it passes, the candidate scores live edits in shadow, then is promoted to a new serving chain. A post-promotion check rolls back automatically if it is worse on live labels.</desc>
+<defs>
+  <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M0,1 L9,5 L0,9 z" fill="#8b949e"/>
+  </marker>
+  <marker id="arrow-start" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M0,1 L9,5 L0,9 z" fill="#8b949e"/>
+  </marker>
+</defs>
+<style>
+  text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif; text-anchor: middle; }
+  .label { font-size: 9.5px; font-weight: 600; letter-spacing: 0.08em; }
+  .title { font-size: 13.5px; font-weight: 600; }
+  .sub { font-size: 11.5px; }
+  .edge { font-size: 11px; }
+  .legend { font-size: 11.5px; text-anchor: start; }
+</style>
+<rect data-node="edit" x="20" y="20" width="180" height="64" rx="8" fill="#0f2342" stroke="#1f6feb" stroke-width="1.25"/>
+<text x="110.0" y="39" class="label" fill="#4493f8" data-box="edit">SCORE</text>
+<text x="110.0" y="57" class="title" fill="#f0f6fc" data-box="edit">Edit scored, queued</text>
+<text x="110.0" y="73" class="sub" fill="#9198a1" data-box="edit">a person reviews it</text>
+<rect data-node="rev" x="270" y="20" width="180" height="64" rx="8" fill="#151b23" stroke="#3d444d" stroke-width="1.25"/>
+<text x="360.0" y="39" class="label" fill="#9198a1" data-box="rev">WIKIPEDIA</text>
+<text x="360.0" y="57" class="title" fill="#f0f6fc" data-box="rev">Reverted or kept</text>
+<text x="360.0" y="73" class="sub" fill="#9198a1" data-box="rev">by the community</text>
+<rect data-node="lab" x="520" y="20" width="180" height="64" rx="8" fill="#0f2342" stroke="#1f6feb" stroke-width="1.25"/>
+<text x="610.0" y="39" class="label" fill="#4493f8" data-box="lab">LABEL</text>
+<text x="610.0" y="57" class="title" fill="#f0f6fc" data-box="lab">Label is final</text>
+<text x="610.0" y="73" class="sub" fill="#9198a1" data-box="lab">at 48 hours</text>
+<rect data-node="mon" x="770" y="20" width="180" height="64" rx="8" fill="#0f2342" stroke="#1f6feb" stroke-width="1.25"/>
+<text x="860.0" y="39" class="label" fill="#4493f8" data-box="mon">DAILY MONITOR</text>
+<text x="860.0" y="57" class="title" fill="#f0f6fc" data-box="mon">Live metrics, drift</text>
+<text x="860.0" y="73" class="sub" fill="#9198a1" data-box="mon">calibration · slices</text>
+<rect data-node="re" x="770" y="148" width="180" height="64" rx="8" fill="#0f2342" stroke="#1f6feb" stroke-width="1.25"/>
+<text x="860.0" y="167" class="label" fill="#4493f8" data-box="re">RETRAIN</text>
+<text x="860.0" y="185" class="title" fill="#f0f6fc" data-box="re">Train on a new snapshot</text>
+<text x="860.0" y="201" class="sub" fill="#9198a1" data-box="re">CPU models on the cluster</text>
+<rect data-node="gate" x="520" y="148" width="180" height="64" rx="8" fill="#2b2210" stroke="#9e6a03" stroke-width="2.25"/>
+<text x="610.0" y="167" class="label" fill="#d29922" data-box="gate">PROMOTION GATE</text>
+<text x="610.0" y="185" class="title" fill="#f0f6fc" data-box="gate">Paired bootstrap</text>
+<text x="610.0" y="201" class="sub" fill="#9198a1" data-box="gate">golden set · slices</text>
+<rect data-node="shadow" x="270" y="148" width="180" height="64" rx="8" fill="#0f2342" stroke="#1f6feb" stroke-width="1.25"/>
+<text x="360.0" y="167" class="label" fill="#4493f8" data-box="shadow">SHADOW</text>
+<text x="360.0" y="185" class="title" fill="#f0f6fc" data-box="shadow">Score live edits</text>
+<text x="360.0" y="201" class="sub" fill="#9198a1" data-box="shadow">beside the champion</text>
+<rect data-node="promo" x="20" y="148" width="180" height="64" rx="8" fill="#0f2a1a" stroke="#238636" stroke-width="1.25"/>
+<text x="110.0" y="167" class="label" fill="#3fb950" data-box="promo">PROMOTE</text>
+<text x="110.0" y="185" class="title" fill="#f0f6fc" data-box="promo">New serving chain</text>
+<text x="110.0" y="201" class="sub" fill="#9198a1" data-box="promo">registry aliases move</text>
+<rect data-node="stay" x="520" y="276" width="180" height="64" rx="8" fill="#151b23" stroke="#3d444d" stroke-width="1.25"/>
+<text x="610.0" y="295" class="label" fill="#9198a1" data-box="stay">GATE FAILS</text>
+<text x="610.0" y="313" class="title" fill="#f0f6fc" data-box="stay">Champion stays</text>
+<text x="610.0" y="329" class="sub" fill="#9198a1" data-box="stay">candidate recorded</text>
+<rect data-node="roll" x="20" y="276" width="180" height="64" rx="8" fill="#2d1215" stroke="#da3633" stroke-width="1.25"/>
+<text x="110.0" y="295" class="label" fill="#f85149" data-box="roll">POST-PROMOTION CHECK</text>
+<text x="110.0" y="313" class="title" fill="#f0f6fc" data-box="roll">Automatic rollback</text>
+<text x="110.0" y="329" class="sub" fill="#9198a1" data-box="roll">if worse on live labels</text>
+<path d="M200,52.0 L270,52.0" fill="none" stroke="#8b949e" stroke-width="1.4" marker-end="url(#arrow)"/>
+<path d="M450,52.0 L520,52.0" fill="none" stroke="#8b949e" stroke-width="1.4" marker-end="url(#arrow)"/>
+<path d="M700,52.0 L770,52.0" fill="none" stroke="#8b949e" stroke-width="1.4" marker-end="url(#arrow)"/>
+<path d="M860.0,84 L860.0,148" fill="none" stroke="#8b949e" stroke-width="1.4" marker-end="url(#arrow)"/>
+<text x="868" y="120" class="edge" text-anchor="start" fill="#9198a1" stroke="#0d1117" stroke-width="4" paint-order="stroke">drift, decay, or schedule</text>
+<path d="M770,180.0 L700,180.0" fill="none" stroke="#8b949e" stroke-width="1.4" marker-end="url(#arrow)"/>
+<path d="M520,180.0 L450,180.0" fill="none" stroke="#8b949e" stroke-width="1.4" marker-end="url(#arrow)"/>
+<text x="485" y="172" class="edge" text-anchor="middle" fill="#9198a1" stroke="#0d1117" stroke-width="4" paint-order="stroke">passes</text>
+<path d="M270,180.0 L200,180.0" fill="none" stroke="#8b949e" stroke-width="1.4" marker-end="url(#arrow)"/>
+<path d="M110.0,148 L110.0,84" fill="none" stroke="#8b949e" stroke-width="1.4" marker-end="url(#arrow)"/>
+<text x="118" y="120" class="edge" text-anchor="start" fill="#9198a1" stroke="#0d1117" stroke-width="4" paint-order="stroke">serves</text>
+<path d="M610.0,212 L610.0,276" fill="none" stroke="#8b949e" stroke-width="1.4" marker-end="url(#arrow)"/>
+<text x="618" y="248" class="edge" text-anchor="start" fill="#9198a1" stroke="#0d1117" stroke-width="4" paint-order="stroke">fails</text>
+<path d="M110.0,212 L110.0,276" fill="none" stroke="#8b949e" stroke-width="1.4" marker-end="url(#arrow)"/>
+<text x="118" y="248" class="edge" text-anchor="start" fill="#9198a1" stroke="#0d1117" stroke-width="4" paint-order="stroke">worse live</text>
+<rect x="20" y="374" width="14" height="14" rx="3" fill="#0f2342" stroke="#1f6feb"/>
+<text x="40" y="385" class="legend" fill="#9198a1">Runs in the cluster</text>
+<rect x="185.60000000000002" y="374" width="14" height="14" rx="3" fill="#151b23" stroke="#3d444d"/>
+<text x="205.60000000000002" y="385" class="legend" fill="#9198a1">Outside WikiGuard</text>
+<rect x="338.40000000000003" y="374" width="14" height="14" rx="3" fill="#2b2210" stroke="#9e6a03"/>
+<text x="358.40000000000003" y="385" class="legend" fill="#9198a1">Decision</text>
+<rect x="433.6" y="374" width="14" height="14" rx="3" fill="#0f2a1a" stroke="#238636"/>
+<text x="453.6" y="385" class="legend" fill="#9198a1">Promotion</text>
+<rect x="535.2" y="374" width="14" height="14" rx="3" fill="#2d1215" stroke="#da3633"/>
+<text x="555.2" y="385" class="legend" fill="#9198a1">Rollback</text>
+</svg>

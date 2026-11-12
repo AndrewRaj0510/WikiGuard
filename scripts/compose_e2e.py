@@ -6,6 +6,9 @@ and ports keep it apart from a dev stack, and it generates throwaway secrets, so
 
     python scripts/compose_e2e.py                 # build, run, check, and clean up
     python scripts/compose_e2e.py --keep          # leave it running to look around
+    python scripts/compose_e2e.py --runs FOLDER   # serve other models, such as CI's tiny one
+
+CI runs this on every change, with the model scripts/make_tiny_runs.py trains (.github/workflows).
 """
 
 import argparse
@@ -32,7 +35,7 @@ GRACEFUL_STOP_SECONDS = 25
 IMAGE_BUDGET_MB = {"scorer": 550.0, "api": 550.0, "ingestor": 275.0, "archiver": 500.0}
 
 
-def write_env(folder: Path) -> tuple[Path, str]:
+def write_env(folder: Path, runs: Path | None = None) -> tuple[Path, str]:
     """Throwaway values. --env-file makes Compose read this and not the owner's .env."""
     password = secrets.token_urlsafe(24)
     user_password = secrets.token_urlsafe(24)
@@ -55,6 +58,8 @@ def write_env(folder: Path) -> tuple[Path, str]:
         "SCORER_RESCORE_SECONDS": "10",
         "LOG_LEVEL": "INFO",
     }
+    if runs is not None:
+        values["RUNS_PATH"] = runs.resolve().as_posix()
     path = folder / "e2e.env"
     values["APP_ENV_FILE"] = path.as_posix()
     path.write_text("".join(f"{key}={value}\n" for key, value in values.items()), "utf-8")
@@ -361,12 +366,13 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--keep", action="store_true", help="leave the stack running")
     parser.add_argument("--out", type=Path, default=Path("data/compose_e2e.json"))
+    parser.add_argument("--runs", type=Path, help="the models to serve, in place of data/runs")
     parser.add_argument(
         "--render-limits", action="store_true", help="also measure the API at 0.1 CPU and 512 MB"
     )
     args = parser.parse_args()
     folder = Path(tempfile.mkdtemp(prefix="wikiguard-e2e-"))
-    env_file, user_password = write_env(folder)
+    env_file, user_password = write_env(folder, args.runs)
     stack = Stack(env_file)
     try:
         stack.clean()
@@ -386,6 +392,8 @@ def main() -> int:
         if not args.keep:
             stack.clean()
         env_file.unlink(missing_ok=True)
+    # data/ is git-ignored, so a fresh checkout, such as CI's, doesn't have it yet.
+    args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(results, indent=2) + "\n", "utf-8")
     print(json.dumps(results, indent=2))
     failed = [

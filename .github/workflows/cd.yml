@@ -1,0 +1,270 @@
+# Delivery, for commits on main that passed CI: build every image for both CPU types, scan it,
+# publish it, then deploy to staging, test staging, and only then deploy to production.
+#
+# It starts from "CI finished", not from the push, so nothing is published from a commit that
+# failed a check. A workflow_run always uses this file as it is on main, so a pull request can't
+# change what runs here, and a fork's pull request never reaches the secrets below.
+name: CD
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+# Read-only by default. The two jobs that push images ask for packages: write themselves.
+permissions:
+  contents: read
+
+# One delivery at a time, in order, and never cancelled halfway through a migration or a deploy.
+concurrency:
+  group: cd
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  SHA: ${{ github.event.workflow_run.head_sha }}
+
+jobs:
+  # Only a successful CI run of a push to main goes further. The weekly and manual CI runs don't.
+  gate:
+    if: >-
+      github.event.workflow_run.conclusion == 'success'
+      && github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-24.04
+    outputs:
+      prefix: ${{ steps.names.outputs.prefix }}
+    steps:
+      - id: names
+        # Registry names must be lowercase, and the account name isn't.
+        run: echo "prefix=${REGISTRY}/${GITHUB_REPOSITORY_OWNER,,}/wikiguard" >> "$GITHUB_OUTPUT"
+
+  # Each image, built on a runner of its own CPU type. Emulating arm64 on amd64 works but is
+  # several times slower. The cluster is arm64 and Render is amd64, so both are needed.
+  build:
+    needs: gate
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - { name: api, dockerfile: services/api/Dockerfile }
+          - { name: ingestor, dockerfile: services/ingestor/Dockerfile }
+          - { name: scorer, dockerfile: services/scorer/Dockerfile }
+          - { name: archiver, dockerfile: services/archiver/Dockerfile }
+          - { name: labeler, dockerfile: jobs/labeler/Dockerfile }
+          - { name: migrate, dockerfile: jobs/migrate/Dockerfile }
+          - { name: monitor, dockerfile: jobs/monitor/Dockerfile }
+          - { name: purge, dockerfile: jobs/purge/Dockerfile }
+          - { name: purge-snapshots, dockerfile: jobs/purge/Dockerfile.snapshots }
+          - { name: retention, dockerfile: jobs/retention/Dockerfile }
+          - { name: retrain-poller, dockerfile: jobs/retrain_poller/Dockerfile }
+        arch:
+          - { name: amd64, runner: ubuntu-24.04 }
+          - { name: arm64, runner: ubuntu-24.04-arm }
+    runs-on: ${{ matrix.arch.runner }}
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ${{ needs.gate.outputs.prefix }}-${{ matrix.image.name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The commit CI tested, not whatever main points at by now.
+          ref: ${{ env.SHA }}
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          # The run's own short-lived token. No long-lived registry password exists.
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # Pushed by digest with no tag. Tags are added by the publish job, after the scan.
+      - id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: ${{ matrix.image.dockerfile }}
+          platforms: linux/${{ matrix.arch.name }}
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ env.SHA }}
+          cache-from: type=gha,scope=${{ matrix.image.name }}-${{ matrix.arch.name }}
+          cache-to: type=gha,scope=${{ matrix.image.name }}-${{ matrix.arch.name }},mode=max
+      - name: Record the digest for the publish job
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          mkdir -p digests
+          echo "$DIGEST" > "digests/${{ matrix.arch.name }}"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: digest-${{ matrix.image.name }}-${{ matrix.arch.name }}
+          path: digests
+          retention-days: 1
+
+  # Scan both builds of an image, and only then give them a name anyone would deploy:
+  # sha-<commit>, which never moves, and main, which follows the newest.
+  publish:
+    needs: [gate, build]
+    strategy:
+      fail-fast: false
+      matrix:
+        name:
+          - api
+          - ingestor
+          - scorer
+          - archiver
+          - labeler
+          - migrate
+          - monitor
+          - purge
+          - purge-snapshots
+          - retention
+          - retrain-poller
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ${{ needs.gate.outputs.prefix }}-${{ matrix.name }}
+      TRIVY_VERSION: 0.76.2
+      TRIVY_SHA256: bc0fc726e017b8927a62b2d3531d7a84ee01769daf5c99ed866dced54089fdbf
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: digest-${{ matrix.name }}-*
+          path: digests
+          merge-multiple: true
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Download Trivy and verify its checksum
+        run: |
+          archive="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          curl -sSfL -o "$archive" \
+            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/${archive}"
+          echo "${TRIVY_SHA256}  ${archive}" | sha256sum --check
+          tar -xzf "$archive" trivy
+      - name: Fail on a critical vulnerability that has a fix, in either build
+        env:
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for arch in amd64 arm64; do
+            ./trivy image --scanners vuln --severity CRITICAL --ignore-unfixed --exit-code 1 \
+              --no-progress --platform "linux/${arch}" "${IMAGE}@$(cat "digests/${arch}")"
+          done
+      - name: Join the two builds under one name
+        run: |
+          docker buildx imagetools create \
+            --tag "${IMAGE}:sha-${SHA}" --tag "${IMAGE}:main" \
+            "${IMAGE}@$(cat digests/amd64)" "${IMAGE}@$(cat digests/arm64)"
+          docker buildx imagetools inspect "${IMAGE}:sha-${SHA}"
+
+  # ---------------------------------------------------------------------------------------
+  # Deploys. Off until the repository variable DEPLOY_ENABLED is "true", which Phase 7 sets
+  # once the Render services and the secrets below exist. Each environment (staging,
+  # production) holds its own secrets, so the staging jobs can't read production's.
+  #
+  # Each needs:  secret DATABASE_MIGRATIONS_URL   the session pooler URL (runners have no IPv6)
+  #              secret RENDER_DEPLOY_HOOK_URL    from the Render service's settings
+  #              variable API_URL                 where the API answers
+  #              variable ORIGIN_URL              optional: the Render address behind the Worker
+  #
+  # The order is migrate, deploy, test. A migration only adds things (the expand/contract test in
+  # jobs/migrate/tests), so the code already running keeps working while the new code rolls out.
+  # ---------------------------------------------------------------------------------------
+  migrate-staging:
+    needs: [gate, publish]
+    if: vars.DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-24.04
+    environment: staging
+    permissions:
+      contents: read
+      packages: read
+    env:
+      MIGRATE_IMAGE: ${{ needs.gate.outputs.prefix }}-migrate
+      DATABASE_MIGRATIONS_URL: ${{ secrets.DATABASE_MIGRATIONS_URL }}
+      REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps: &migrate-steps
+      - name: Keep the database's address out of this public log
+        run: |
+          # The migration prints who it connects as and where. GitHub hides only what it's told to.
+          rest="${DATABASE_MIGRATIONS_URL#*://}"
+          address="${rest#*@}"
+          echo "::add-mask::${rest%%:*}"
+          echo "::add-mask::${address%%[:/?]*}"
+      - name: Run the migration with the image that was just published
+        run: |
+          echo "$REGISTRY_TOKEN" | docker login "$REGISTRY" -u "$GITHUB_ACTOR" --password-stdin
+          docker run --rm -e DATABASE_MIGRATIONS_URL "${MIGRATE_IMAGE}:sha-${SHA}"
+
+  deploy-staging:
+    needs: migrate-staging
+    runs-on: ubuntu-24.04
+    environment: staging
+    env:
+      RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+    steps: &deploy-steps
+      - name: Ask Render to deploy this exact commit
+        # The hook URL is a secret, so curl prints nothing of it. 200 means the deploy started.
+        run: curl --fail --silent --show-error --output /dev/null "${RENDER_DEPLOY_HOOK_URL}&ref=${SHA}"
+
+  smoke-staging:
+    needs: deploy-staging
+    runs-on: ubuntu-24.04
+    environment: staging
+    env:
+      API_URL: ${{ vars.API_URL }}
+      ORIGIN_URL: ${{ vars.ORIGIN_URL }}
+    steps: &smoke-steps
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.SHA }}
+          persist-credentials: false
+      - uses: ./.github/actions/python-env
+      - name: Wait for the new build, then check it's up and still locked
+        run: |
+          if [ -n "$ORIGIN_URL" ]; then
+            python scripts/smoke_test.py --api "$API_URL" --commit "$SHA" --origin "$ORIGIN_URL"
+          else
+            python scripts/smoke_test.py --api "$API_URL" --commit "$SHA"
+          fi
+
+  # Production starts only after staging's smoke test passed. Adding a required reviewer to the
+  # production environment in the repo's settings turns this into a manual approval.
+  migrate-production:
+    needs: [gate, smoke-staging]
+    runs-on: ubuntu-24.04
+    environment: production
+    permissions:
+      contents: read
+      packages: read
+    env:
+      MIGRATE_IMAGE: ${{ needs.gate.outputs.prefix }}-migrate
+      DATABASE_MIGRATIONS_URL: ${{ secrets.DATABASE_MIGRATIONS_URL }}
+      REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps: *migrate-steps
+
+  deploy-production:
+    needs: migrate-production
+    runs-on: ubuntu-24.04
+    environment: production
+    env:
+      RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+    steps: *deploy-steps
+
+  smoke-production:
+    needs: deploy-production
+    runs-on: ubuntu-24.04
+    environment: production
+    env:
+      API_URL: ${{ vars.API_URL }}
+      ORIGIN_URL: ${{ vars.ORIGIN_URL }}
+    steps: *smoke-steps

@@ -1,5 +1,6 @@
 """Vandals write this input, so the parser and features must survive anything, quickly."""
 
+import sys
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -27,7 +28,10 @@ XSS = [
     "‮",
     "​" * 50,
 ]
-LONGEST_ALLOWED_SECONDS = 3.0
+# Coverage measurement traces every line, which made these inputs 3 to 11 times slower when
+# measured (F-133). The limit grows to match, and still catches what the test is for: a pattern
+# that goes quadratic on a 2,000,000-character input takes minutes, not seconds.
+LONGEST_ALLOWED_SECONDS = 3.0 if sys.gettrace() is None else 30.0
 
 
 def tag() -> st.SearchStrategy[str]:

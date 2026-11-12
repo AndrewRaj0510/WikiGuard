@@ -480,6 +480,43 @@ def load_models(context: Context) -> None:
         chain.poll(seconds, context.stop)
 
 
+def document_problem_format(app: FastAPI) -> None:
+    """Make the published schema describe the errors this API really sends.
+
+    FastAPI documents every 422 as its own default error shape. The handlers above replace that
+    with the problem format, so the schema was wrong, and the frontend's types and the API fuzzer
+    are both generated from it. Schemathesis found the mismatch (Phase 6).
+    """
+    build = app.openapi
+
+    def openapi() -> dict[str, Any]:
+        if app.openapi_schema:
+            return app.openapi_schema
+        schema = build()
+        components = schema.setdefault("components", {}).setdefault("schemas", {})
+        problem = models.ProblemDetails.model_json_schema(
+            ref_template="#/components/schemas/{model}"
+        )
+        components |= problem.pop("$defs", {})
+        components["ProblemDetails"] = problem
+        for unused in ("HTTPValidationError", "ValidationError"):
+            components.pop(unused, None)
+        for operations in schema["paths"].values():
+            for operation in operations.values():
+                if "422" in operation.get("responses", {}):
+                    operation["responses"]["422"] = {
+                        "description": "The request isn't valid",
+                        "content": {
+                            PROBLEM_TYPE: {
+                                "schema": {"$ref": "#/components/schemas/ProblemDetails"}
+                            }
+                        },
+                    }
+        return schema
+
+    app.openapi = openapi  # type: ignore[method-assign]
+
+
 def create_app(
     settings: Settings,
     chain: ServingChain | None = None,
@@ -536,6 +573,7 @@ def create_app(
     )
     app.state.context = context
     install_error_handlers(app)
+    document_problem_format(app)
     app.add_middleware(GZipMiddleware, minimum_size=1024)
     app.add_middleware(RequestMiddleware, settings=settings, metrics=metrics)
     app.add_middleware(
@@ -551,8 +589,9 @@ def create_app(
     # --- Operations ---
 
     @app.get("/health", include_in_schema=False)
-    def health() -> dict[str, str]:
-        return {"status": "ok"}
+    def health(context: Ctx) -> dict[str, str]:
+        # The commit lets the deploy pipeline wait for the new build before it tests anything.
+        return {"status": "ok", "commit": context.settings.git_commit or "unknown"}
 
     @app.get("/ready", include_in_schema=False)
     def ready(response: Response, context: Ctx) -> dict[str, Any]:

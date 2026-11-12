@@ -12,7 +12,7 @@ the areas it needs and calls load_settings() once at startup:
 
 from typing import Literal, TypeVar
 
-from pydantic import Field, SecretStr, ValidationError, field_validator
+from pydantic import AliasChoices, Field, SecretStr, ValidationError, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 MIN_SECRET_KEY_LENGTH = 32
@@ -107,6 +107,14 @@ class ApiSettings(BaseConfig):
     db_statement_timeout_ms: int = Field(default=3000, gt=0)
     db_pool_size: int = Field(default=5, gt=0)
     max_body_bytes: int = Field(default=128 * 1024, gt=0)
+    # The commit this build came from, shown by /health so a deploy can be told from the one before
+    # it. Render sets RENDER_GIT_COMMIT itself. Blank locally. Hex only, so nothing else can be
+    # echoed back to a caller.
+    git_commit: str = Field(
+        default="",
+        pattern=r"^[0-9a-f]{0,40}$",
+        validation_alias=AliasChoices("git_commit", "render_git_commit"),
+    )
 
 
 class FeatureFlagSettings(BaseConfig):

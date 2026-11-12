@@ -1,0 +1,67 @@
+# Automated dependency updates. Dependabot opens a pull request, CI runs on it like any other,
+# and a person merges it. Its pull requests get no secrets, and CI needs none.
+#
+# Python: each folder has a requirements.in (the pins a person chose) and a hash-locked
+# requirements.txt compiled from it. If a pull request changes only the .in file, the lint job
+# fails with "run scripts/lock_requirements.py": run it on that branch and push the result.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    # "/" covers .github/workflows. The shared setup step lives in its own folder.
+    directories: ["/", "/.github/actions/python-env"]
+    schedule: { interval: weekly }
+    groups:
+      actions: { patterns: ["*"] }
+
+  - package-ecosystem: docker
+    # Base images are pinned by digest, so a rebuilt tag arrives here as a pull request.
+    directories:
+      - /services/api
+      - /services/ingestor
+      - /services/scorer
+      - /services/archiver
+      - /jobs/labeler
+      - /jobs/migrate
+      - /jobs/monitor
+      - /jobs/purge
+      - /jobs/retention
+      - /jobs/retrain_poller
+      - /jobs/trainer
+    schedule: { interval: weekly }
+    groups:
+      base-images: { patterns: ["*"] }
+
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule: { interval: weekly }
+
+  - package-ecosystem: pip
+    directories:
+      - /
+      - /.github
+      - /services/api
+      - /services/ingestor
+      - /services/scorer
+      - /services/archiver
+      - /jobs/labeler
+      - /jobs/migrate
+      - /jobs/monitor
+      - /jobs/purge
+      - /jobs/retention
+      - /jobs/retrain_poller
+      - /jobs/trainer
+    schedule: { interval: weekly }
+    # One pull request for the routine updates, so the lock files move together. Security
+    # updates still arrive on their own, straight away.
+    groups:
+      python:
+        update-types: [minor, patch]
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule: { interval: weekly }
+    groups:
+      frontend:
+        update-types: [minor, patch]
+    open-pull-requests-limit: 5

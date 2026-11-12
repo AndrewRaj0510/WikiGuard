@@ -1,0 +1,9 @@
+# Advisories pip-audit may pass over, one per line: the ID, then why. An entry needs a reason a
+# reader can check and a date to look again. With no entry, any known vulnerability fails CI.
+#
+# PYSEC-2026-2447 (CVE-2025-69872), diskcache 5.6.3, found 2026-11-11. diskcache reads pickles
+# from its cache folder, so someone who can write to that folder can run code. No fixed version
+# exists. It's only in the snapshot-purge image, pulled in by DVC, where the cache folder sits
+# inside the job's own container and nothing else writes to it. Anyone able to write there
+# already controls the job. Look again by 2027-02-11, or when DVC drops or updates diskcache.
+PYSEC-2026-2447

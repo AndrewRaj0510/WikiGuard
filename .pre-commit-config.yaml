@@ -27,3 +27,13 @@ repos:
     hooks:
       - id: check-added-large-files
         args: [--maxkb=1024]
+
+  # A changed requirements.in without its regenerated lock would fail CI. Reads files only.
+  - repo: local
+    hooks:
+      - id: lock-requirements
+        name: lock files match their .in files
+        entry: python scripts/lock_requirements.py --check
+        language: system
+        pass_filenames: false
+        files: requirements.*\.(in|txt)$

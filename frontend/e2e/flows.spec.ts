@@ -146,6 +146,17 @@ test.describe("pages and headers", () => {
     expect(landing.headers()["x-robots-tag"]).toBeUndefined();
   });
 
+  test("robots.txt exists, and a missing file's 404 page still carries the CSP", async ({ request }) => {
+    const robots = await request.get("/robots.txt");
+    expect(robots.status()).toBe(200);
+    expect(robots.headers()["content-type"]).toContain("text/plain");
+    expect(await robots.text()).toContain("Disallow: /api/");
+    // There's no favicon.ico (the icon is icon.svg), so this is the 404 page, and it's HTML.
+    const missing = await request.get("/favicon.ico");
+    expect(missing.status()).toBe(404);
+    expect(missing.headers()["content-security-policy"]).toContain("'nonce-");
+  });
+
   test("an unknown page gets the custom 404", async ({ page, problems }) => {
     void problems;
     const response = await page.goto("/no-such-page");

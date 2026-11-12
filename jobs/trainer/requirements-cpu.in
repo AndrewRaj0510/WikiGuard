@@ -1,0 +1,31 @@
+# lock: --python-platform x86_64-manylinux_2_28 --index-strategy unsafe-best-match
+# The trainer's tools with the CPU build of PyTorch, for CI's training smoke test and ONNX parity
+# check. requirements.txt next to this file is the laptop's GPU set, installed by hand (F-049).
+# Locked for Linux amd64 only, which is what CI runs: PyTorch's CPU wheels come from its own
+# index, and "best match" lets every other package still come from PyPI. Hashes make that safe.
+# Install, then the two local packages:
+#   pip install -r requirements-build.txt -r jobs/trainer/requirements-cpu.txt
+#   pip install --no-deps --no-build-isolation -e packages/wikiguard_core -e jobs/trainer
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.14.1+cpu
+transformers==5.22.1
+mlflow-skinny==3.5.1
+onnx==1.23.2
+onnxscript==0.7.2
+onnxruntime==1.31.1
+safetensors==0.8.0
+tokenizers==0.23.3
+numpy==2.4.6
+pandas==2.3.3
+pyarrow==26.0.1
+evidently==0.7.23
+matplotlib==3.11.2
+alembic==1.20.1
+sqlalchemy==2.0.57
+psycopg[binary]==3.3.8
+psycopg-pool==3.3.3
+httpx==0.28.1
+pydantic-settings==2.16.2
+confluent-kafka==2.16.1
+prometheus-client==0.26.0
+pytest==9.2.0

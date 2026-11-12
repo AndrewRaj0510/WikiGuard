@@ -430,6 +430,13 @@ export interface components {
             /** Rev Id */
             rev_id: number;
         };
+        /** FieldError */
+        FieldError: {
+            /** Field */
+            field: string;
+            /** Message */
+            message: string;
+        };
         /** GateStatus */
         GateStatus: {
             /** Enabled */
@@ -448,11 +455,6 @@ export interface components {
         GuestSignIn: {
             /** Tab Id */
             tab_id: string;
-        };
-        /** HTTPValidationError */
-        HTTPValidationError: {
-            /** Detail */
-            detail?: components["schemas"]["ValidationError"][];
         };
         /** HealthSummary */
         HealthSummary: {
@@ -597,6 +599,32 @@ export interface components {
             user_edit_count?: number | null;
         };
         /**
+         * ProblemDetails
+         * @description Every error the API sends, in one format (RFC 9457), as application/problem+json.
+         */
+        ProblemDetails: {
+            /** Code */
+            code: string;
+            /**
+             * Detail
+             * @default null
+             */
+            detail: string | null;
+            /**
+             * Errors
+             * @default null
+             */
+            errors: components["schemas"]["FieldError"][] | null;
+            /** Request Id */
+            request_id: string | null;
+            /** Status */
+            status: number;
+            /** Title */
+            title: string;
+            /** Type */
+            type: string;
+        };
+        /**
          * ReleaseSeat
          * @description Sent by sendBeacon on pagehide, which can't set headers, so the token travels in the body.
          */
@@ -683,19 +711,6 @@ export interface components {
              */
             take_over: boolean;
         };
-        /** ValidationError */
-        ValidationError: {
-            /** Context */
-            ctx?: Record<string, never>;
-            /** Input */
-            input?: unknown;
-            /** Location */
-            loc: (string | number)[];
-            /** Message */
-            msg: string;
-            /** Error Type */
-            type: string;
-        };
     };
     responses: never;
     parameters: never;
@@ -727,13 +742,13 @@ export interface operations {
                     "application/json": components["schemas"]["SessionInfo"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request isn't valid */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -760,13 +775,13 @@ export interface operations {
                     "application/json": components["schemas"]["SessionInfo"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request isn't valid */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -829,13 +844,13 @@ export interface operations {
                     "application/json": components["schemas"]["EditDetail"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request isn't valid */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -864,13 +879,13 @@ export interface operations {
                     "application/json": components["schemas"]["ReviewReply"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request isn't valid */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -895,13 +910,13 @@ export interface operations {
                     "application/json": components["schemas"]["ExplainReply"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request isn't valid */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -927,13 +942,13 @@ export interface operations {
                     "application/json": components["schemas"]["EditPage"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request isn't valid */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -958,13 +973,13 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description The request isn't valid */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -991,13 +1006,13 @@ export interface operations {
                     "application/json": components["schemas"]["HeartbeatReply"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request isn't valid */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -1022,13 +1037,13 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description The request isn't valid */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -1115,13 +1130,13 @@ export interface operations {
                     "application/json": components["schemas"]["PredictReply"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request isn't valid */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -1149,13 +1164,13 @@ export interface operations {
                     "application/json": components["schemas"]["EditPage"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request isn't valid */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };

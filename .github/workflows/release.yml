@@ -1,0 +1,66 @@
+# A release is a tag on a commit that CD already built, scanned, and published. Nothing is
+# rebuilt here: the images that were tested get the version as a second name, and the changelog
+# entry becomes the release notes. To release:
+#   1. Move the "Unreleased" notes in CHANGELOG.md under a new version heading, and merge.
+#   2. Wait for CD to finish on that commit.
+#   3. git tag -a v0.6.0 -m "v0.6.0" && git push origin v0.6.0
+name: Release
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  # ZAP and Schemathesis against staging, which CD has just deployed this commit to.
+  scan:
+    if: vars.DEPLOY_ENABLED == 'true'
+    uses: ./.github/workflows/security-scan.yml
+
+  release:
+    needs: scan
+    # Runs when the scan passed, and also while there's no staging to scan. Not when it failed.
+    if: always() && (needs.scan.result == 'success' || needs.scan.result == 'skipped')
+    runs-on: ubuntu-24.04
+    permissions:
+      # To create the GitHub release, and to add a tag to images that already exist.
+      contents: write
+      packages: write
+    env:
+      REGISTRY: ghcr.io
+      VERSION: ${{ github.ref_name }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: The tag must point at a commit on main
+        run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+      - name: Release notes from the changelog
+        run: |
+          python scripts/release_notes.py "$VERSION" > notes.md
+          cat notes.md
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Give the tested images the version as a second name
+        run: |
+          prefix="${REGISTRY}/${GITHUB_REPOSITORY_OWNER,,}/wikiguard"
+          for name in api ingestor scorer archiver labeler migrate monitor purge \
+            purge-snapshots retention retrain-poller; do
+            # Fails if CD never published this commit, so an untested commit can't be released.
+            docker buildx imagetools create \
+              --tag "${prefix}-${name}:${VERSION}" "${prefix}-${name}:sha-${GITHUB_SHA}"
+          done
+      - name: Publish the GitHub release
+        run: gh release create "$VERSION" --title "$VERSION" --notes-file notes.md --verify-tag

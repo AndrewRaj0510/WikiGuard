@@ -8,7 +8,8 @@ from typing import Any
 
 import psycopg
 import pytest
-from api_test_helpers import METRICS_TOKEN, PASSWORD, Browser, Stack, one, seed_edit
+import smoke_test
+from api_test_helpers import METRICS_TOKEN, PASSWORD, Browser, Stack, make_settings, one, seed_edit
 from fastapi.routing import APIRoute
 from psycopg.types.json import Jsonb
 from wikiguard_api.access import Principal
@@ -250,6 +251,34 @@ def test_with_an_edge_secret_direct_requests_are_refused(stack: Stack) -> None:
 @pytest.mark.parametrize("stack", [{"edge_shared_secret": "edge-test-secret"}], indirect=True)
 def test_health_stays_reachable_without_the_edge_secret(stack: Stack) -> None:
     assert stack.browser().client.get("/health").status_code == 200
+
+
+@pytest.mark.parametrize("stack", [{"git_commit": "0123abc"}], indirect=True)
+def test_health_names_the_commit_it_was_built_from(stack: Stack) -> None:
+    assert stack.browser().client.get("/health").json() == {"status": "ok", "commit": "0123abc"}
+
+
+def test_health_says_unknown_when_no_commit_is_set(stack: Stack) -> None:
+    assert stack.browser().client.get("/health").json()["commit"] == "unknown"
+
+
+@pytest.mark.parametrize("stack", [{"git_commit": "0123abc"}], indirect=True)
+def test_the_deploy_smoke_test_passes_against_the_real_app(stack: Stack) -> None:
+    """The smoke test's own tests use a pretend API, which could repeat my assumptions (F-099)."""
+    done = smoke_test.run(stack.browser().client, None, "0123abc", 0, lambda _: None)
+    assert len(done) == 3
+
+
+@pytest.mark.parametrize(
+    "stack", [{"edge_shared_secret": "edge-test-secret", "git_commit": "0123abc"}], indirect=True
+)
+def test_the_smoke_test_sees_a_closed_origin_as_closed(stack: Stack) -> None:
+    smoke_test.check_origin_closed(stack.browser().client)
+
+
+def test_a_commit_that_isnt_hex_stops_the_api_starting(stack: Stack) -> None:
+    with pytest.raises(ValueError, match="git_commit"):
+        make_settings(stack.settings.database_url.get_secret_value(), git_commit="<script>")
 
 
 @pytest.mark.parametrize("stack", [{"edge_shared_secret": "edge-test-secret"}], indirect=True)
@@ -1112,6 +1141,19 @@ def test_the_openapi_schema_has_public_routes_and_hides_admin(stack: Stack) -> N
     schema = stack.browser().client.get("/v1/openapi.json").json()
     assert "/v1/queue" in schema["paths"]
     assert not [path for path in schema["paths"] if "admin" in path]
+
+
+def test_the_schema_documents_errors_in_the_format_the_api_sends(stack: Stack) -> None:
+    client = stack.browser().client
+    schema = client.get("/v1/openapi.json").json()
+    documented = schema["paths"]["/v1/auth/guest"]["post"]["responses"]["422"]["content"]
+    assert list(documented) == ["application/problem+json"]
+    assert "HTTPValidationError" not in schema["components"]["schemas"]
+    sent = client.post("/v1/auth/guest", json={})
+    assert sent.status_code == 422
+    assert sent.headers["content-type"].startswith("application/problem+json")
+    wanted = set(schema["components"]["schemas"]["ProblemDetails"]["required"])
+    assert wanted <= set(sent.json())
 
 
 def test_all_public_paths_are_versioned(stack: Stack) -> None:

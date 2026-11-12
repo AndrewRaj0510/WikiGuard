@@ -1,80 +1,223 @@
-# Minimal CI from the first commit. It grows in Phase 6.
+# Every check a change must pass. Nothing here deploys, and nothing here holds a secret, so a pull
+# request from a fork runs the same checks with nothing to steal.
 name: CI
 
 on:
   push:
     branches: [main]
+  # pull_request, never pull_request_target: the second one runs with the repo's secrets and a
+  # write token, which is dangerous with code from a fork.
   pull_request:
+  # Weekly, because new advisories appear for dependencies that haven't changed.
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
 
 # The workflow only reads the repo, so a compromised step can't change it.
 permissions:
   contents: read
 
+# A newer push to a pull request replaces the run before it. Runs on main always finish.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
 jobs:
-  lint:
+  # Path filters: a pull request only runs the jobs its files can affect. A push to main, the
+  # weekly run, and a manual run always run everything.
+  changes:
     runs-on: ubuntu-24.04
+    outputs:
+      python: ${{ steps.filter.outputs.python }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      images: ${{ steps.filter.outputs.images }}
     steps:
       # Actions are pinned to commit SHAs because tags can be moved to different code.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
-          python-version: "3.11"
-      - run: pip install -r requirements-dev.txt
+          fetch-depth: 0
+          persist-credentials: false
+      - id: filter
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" != "pull_request" ]; then
+            printf 'python=true\nfrontend=true\nimages=true\n' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          files=$(git diff --name-only "$BASE"...HEAD)
+          echo "$files"
+          match() { if echo "$files" | grep -qE "$1"; then echo true; else echo false; fi; }
+          shared='^\.github/|^requirements|^pyproject\.toml$|^docker-compose|^\.dockerignore$'
+          {
+            echo "python=$(match "$shared|^(packages|services|jobs|scripts|tests|snapshots)/")"
+            echo "frontend=$(match "$shared|^frontend/|^services/api/|^scripts/export_openapi\.py$")"
+            echo "images=$(match "$shared|^(packages|services|jobs)/|^tests/(e2e|fixtures)/|^scripts/(compose_e2e|make_tiny_runs)\.py$")"
+          } >> "$GITHUB_OUTPUT"
+
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/python-env
       - run: ruff check .
       - run: ruff format --check .
+      - name: Types in the shared package
+        run: mypy packages/wikiguard_core/wikiguard_core
+      - name: Every lock file is complete and matches its .in file
+        run: python scripts/lock_requirements.py --check
 
+  # The whole Python suite on real Postgres and Redpanda: unit tests, migrations up and down, RLS
+  # on every table, each role's grants, the Explain injection set with a mocked LLM, and the
+  # checks on this pipeline itself. Then a coverage gate for each part.
   test:
+    needs: changes
+    if: needs.changes.outputs.python == 'true'
     runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: "3.11"
-      - run: pip install -r requirements-dev.txt
-      - run: pytest
-
-  # Migrations, roles, RLS on every table, and the jobs, on real Postgres.
-  integration:
-    runs-on: ubuntu-24.04
-    services:
-      postgres:
-        image: postgres:17.11-alpine
-        env:
-          POSTGRES_USER: wikiguard
-          POSTGRES_PASSWORD: ci-only-not-a-secret
-          POSTGRES_DB: wikiguard
-        ports:
-          - 5433:5432
-        options: >-
-          --health-cmd "pg_isready -U wikiguard"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 20
     env:
+      POSTGRES_PASSWORD: ci-only-not-a-secret
       TEST_DATABASE_URL: postgresql://wikiguard:ci-only-not-a-secret@127.0.0.1:5433/wikiguard
+      TEST_KAFKA_BOOTSTRAP: 127.0.0.1:19092
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
-          python-version: "3.11"
-      - run: pip install -r requirements-dev.txt
-      - run: pytest -m integration
+          persist-credentials: false
+      - uses: ./.github/actions/python-env
+      - name: Start Postgres and Redpanda, the same images Compose uses locally
+        run: docker compose up -d --wait postgres redpanda
+      - run: pytest --cov --cov-report=json:coverage.json --cov-report=term
+      - name: Coverage gates (80% shared package, 70% each service and job)
+        run: python scripts/check_coverage.py coverage.json
 
-  # The Next.js app (Phase 4): contract, lint, types, unit tests, build, secrets in the bundle,
-  # page budgets, end-to-end with the API mocked in the browser (XSS corpus, axe, keyboard), and
+  # PyTorch on CPU: the trainer's tests, then a tiny MLP trained, exported to ONNX, and compared
+  # with PyTorch (the training smoke test and the parity check). The model it leaves behind is
+  # what the end-to-end job serves.
+  trainer:
+    needs: changes
+    if: needs.changes.outputs.python == 'true'
+    runs-on: ubuntu-24.04
+    env:
+      # No model or tokenizer may be downloaded in a test.
+      HF_HUB_OFFLINE: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/python-env
+        with:
+          requirements: jobs/trainer/requirements-cpu.txt
+      - run: pip install --no-deps --no-build-isolation -e jobs/trainer
+      - run: pytest jobs/trainer/tests --confcutdir=jobs/trainer
+      - name: Training smoke test and ONNX parity
+        run: python scripts/make_tiny_runs.py data/runs
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: tiny-runs
+          path: data/runs
+          retention-days: 1
+
+  # Every service as its real image, with its real least-privilege login: a recorded stream in,
+  # a scored, labeled, API-visible edit out. Also checks each serving image's size budget.
+  e2e:
+    needs: [changes, trainer]
+    if: needs.changes.outputs.images == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/python-env
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: tiny-runs
+          path: data/runs
+      - run: python scripts/compose_e2e.py
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: compose-e2e
+          path: data/compose_e2e.json
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # Each image is built for amd64 and scanned. The multi-arch build and the push to the registry
+  # happen only on main, in images.yml.
+  images:
+    needs: changes
+    if: needs.changes.outputs.images == 'true'
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: api, dockerfile: services/api/Dockerfile }
+          - { name: ingestor, dockerfile: services/ingestor/Dockerfile }
+          - { name: scorer, dockerfile: services/scorer/Dockerfile }
+          - { name: archiver, dockerfile: services/archiver/Dockerfile }
+          - { name: labeler, dockerfile: jobs/labeler/Dockerfile }
+          - { name: migrate, dockerfile: jobs/migrate/Dockerfile }
+          - { name: monitor, dockerfile: jobs/monitor/Dockerfile }
+          - { name: purge, dockerfile: jobs/purge/Dockerfile }
+          - { name: purge-snapshots, dockerfile: jobs/purge/Dockerfile.snapshots }
+          - { name: retention, dockerfile: jobs/retention/Dockerfile }
+          - { name: retrain-poller, dockerfile: jobs/retrain_poller/Dockerfile }
+    env:
+      TRIVY_VERSION: 0.76.2
+      TRIVY_SHA256: bc0fc726e017b8927a62b2d3531d7a84ee01769daf5c99ed866dced54089fdbf
+      IMAGE: wikiguard/${{ matrix.name }}:ci
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          load: true
+          push: false
+          tags: ${{ env.IMAGE }}
+          # Layers are cached between runs, one cache per image.
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,scope=${{ matrix.name }},mode=max
+      - name: The image runs as a user that isn't root
+        run: test "$(docker run --rm --entrypoint id "$IMAGE" -u)" != "0"
+      # Trivy is downloaded as a release file and checked against a pinned checksum, the same way
+      # as gitleaks below, so no third-party action runs in this job.
+      - name: Download Trivy and verify its checksum
+        run: |
+          archive="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          curl -sSfL -o "$archive" \
+            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/${archive}"
+          echo "${TRIVY_SHA256}  ${archive}" | sha256sum --check
+          tar -xzf "$archive" trivy
+      - name: Report high and critical vulnerabilities
+        run: ./trivy image --scanners vuln --severity HIGH,CRITICAL --no-progress "$IMAGE"
+      - name: Fail on a critical vulnerability that has a fix
+        run: >-
+          ./trivy image --scanners vuln --severity CRITICAL --ignore-unfixed
+          --exit-code 1 --no-progress --skip-db-update "$IMAGE"
+
+  # The Next.js app: contract, lint, types, unit tests, build, secrets in the bundle, page
+  # budgets, end-to-end with the API mocked in the browser (XSS corpus, axe, keyboard), and
   # Lighthouse. Nothing here reaches Wikimedia, an LLM, or a real API.
   frontend:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: frontend
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
-          python-version: "3.11"
-      - run: pip install -r requirements-dev.txt
-        working-directory: .
+          persist-credentials: false
+      - uses: ./.github/actions/python-env
       - name: The committed API schema matches the API's code
         run: python scripts/export_openapi.py --check
         working-directory: .
@@ -83,6 +226,7 @@ jobs:
           node-version: "22"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
+      # npm ci installs exactly what package-lock.json lists, and checks each package's hash.
       - run: npm ci
       - name: The frontend's types match the schema (contract drift fails here)
         run: npm run types && git diff --exit-code -- src/lib/api/schema.d.ts
@@ -98,6 +242,46 @@ jobs:
       - name: Lighthouse budgets
         run: npx lhci autorun
 
+  # Known vulnerabilities in dependencies. Always runs: an advisory can land with no change here.
+  audit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: .github/requirements-audit.txt
+      - run: pip install --require-hashes -r .github/requirements-audit.txt
+      - name: pip-audit on every lock file
+        run: |
+          # Each .in file has a hash-locked .txt next to it, and that's what gets installed.
+          # The few advisories accepted on purpose are in audit-ignore.txt, each with its reason.
+          ignored=()
+          while read -r id; do
+            ignored+=(--ignore-vuln "$id")
+          done < <(grep -vE '^[[:space:]]*(#|$)' .github/audit-ignore.txt)
+          failed=0
+          for source in $(git ls-files '*.in'); do
+            lock="${source%.in}.txt"
+            echo "::group::$lock"
+            pip-audit --require-hashes --disable-pip "${ignored[@]}" --requirement "$lock" \
+              || failed=1
+            echo "::endgroup::"
+          done
+          exit "$failed"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+      - name: npm audit on what ships to the browser and the server
+        run: npm audit --omit=dev --audit-level=high
+        working-directory: frontend
+      - name: npm audit on build and test tools (reported, doesn't fail the job)
+        run: npm audit || true
+        working-directory: frontend
+
   gitleaks:
     runs-on: ubuntu-24.04
     env:
@@ -108,6 +292,7 @@ jobs:
         with:
           # Scan the full history, because a secret stays exposed after a later commit removes it.
           fetch-depth: 0
+          persist-credentials: false
       - name: Download gitleaks and verify its checksum
         run: |
           archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
@@ -116,3 +301,18 @@ jobs:
           echo "${GITLEAKS_SHA256}  ${archive}" | sha256sum --check
           tar -xzf "$archive" gitleaks
       - run: ./gitleaks git . --redact --exit-code 1
+
+  # The one check branch protection needs to require. A job skipped by the path filter counts as
+  # passed, and a failed or cancelled one fails this.
+  ci:
+    if: always()
+    needs: [changes, lint, test, trainer, e2e, images, frontend, audit, gitleaks]
+    runs-on: ubuntu-24.04
+    steps:
+      - env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "$RESULTS"
+          case " $RESULTS " in
+            *" failure "* | *" cancelled "*) exit 1 ;;
+          esac

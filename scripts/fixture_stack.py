@@ -28,6 +28,7 @@ WAIT_SECONDS = 300
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--down", action="store_true", help="stop the stack and delete its data")
+    parser.add_argument("--runs", type=Path, help="the models to serve, in place of data/runs")
     args = parser.parse_args()
     FOLDER.mkdir(parents=True, exist_ok=True)
     env_file = FOLDER / "e2e.env"
@@ -38,7 +39,7 @@ def main() -> int:
         print("Stopped")  # noqa: T201
         return 0
 
-    env_file, user_password = e2e.write_env(FOLDER)
+    env_file, user_password = e2e.write_env(FOLDER, args.runs)
     (FOLDER / "user_password.txt").write_text(user_password, "utf-8")
     stack = e2e.Stack(env_file)
     stack.clean()

@@ -1,0 +1,31 @@
+# One place for the Python setup every job shares, so the install rule can't differ between jobs.
+name: Python environment
+description: Python 3.11, hash-locked requirements, and the shared package
+
+inputs:
+  requirements:
+    description: The lock file to install
+    default: requirements-dev.txt
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+      with:
+        python-version: "3.11"
+        # Downloads are cached and keyed by the lock file. Hashes are still checked on install.
+        cache: pip
+        cache-dependency-path: |
+          requirements-build.txt
+          ${{ inputs.requirements }}
+    - name: Install from the lock files
+      shell: bash
+      env:
+        # Passed through the environment, never pasted into the script, so a value can't run as code.
+        REQUIREMENTS: ${{ inputs.requirements }}
+      run: |
+        # --require-hashes refuses any package whose file differs from the one that was locked.
+        pip install --require-hashes -r requirements-build.txt -r "$REQUIREMENTS"
+        # The shared package is this repo's own code. Its dependencies are in the lock already,
+        # and its build tool is the locked one, so nothing here is downloaded unpinned.
+        pip install --no-deps --no-build-isolation -e packages/wikiguard_core

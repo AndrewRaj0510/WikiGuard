@@ -1,0 +1,82 @@
+# Two scans of the running staging site: OWASP ZAP's baseline against the pages, and Schemathesis
+# against the API. Run by hand, and by the release workflow before a version is published.
+#
+# Staging only. Both scans send a lot of requests, and production runs on free quotas.
+# The staging environment needs: variable SITE_URL (the pages), variable API_URL (the API).
+name: Security scan
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-scan
+  cancel-in-progress: false
+
+jobs:
+  # Passive: ZAP opens the pages like a browser and reads what comes back. It attacks nothing.
+  zap-baseline:
+    runs-on: ubuntu-24.04
+    environment: staging
+    env:
+      SITE_URL: ${{ vars.SITE_URL }}
+      # Pinned by digest, like every other image.
+      ZAP_IMAGE: ghcr.io/zaproxy/zaproxy:2.17.0@sha256:9624669db72f54d86c4b46a7064518bd9bf79d8c61a4c31befa9923489f328af
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Stop if staging has no address yet
+        run: test -n "$SITE_URL" || { echo "::error::Set the staging variable SITE_URL"; exit 1; }
+      - name: ZAP baseline
+        run: |
+          # ZAP runs as its own user inside the container and writes its reports here.
+          chmod a+rwx .zap
+          status=0
+          docker run --rm -v "$PWD/.zap:/zap/wrk:rw" "$ZAP_IMAGE" zap-baseline.py \
+            -t "$SITE_URL" -c rules.tsv -r zap-report.html -J zap-report.json || status=$?
+          # 0 is clean and 2 is warnings only, which a person reads in the report.
+          # 1 means a rule marked FAIL in .zap/rules.tsv fired. 3 means ZAP itself broke.
+          if [ "$status" -ne 0 ] && [ "$status" -ne 2 ]; then exit "$status"; fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: zap-report
+          path: |
+            .zap/zap-report.html
+            .zap/zap-report.json
+          if-no-files-found: ignore
+          retention-days: 30
+
+  # API fuzzing from the schema the API publishes, over real HTTP. Signed in as a guest, which
+  # can read and can't change anything, so staging's data stays as it was.
+  schemathesis:
+    runs-on: ubuntu-24.04
+    environment: staging
+    env:
+      API_URL: ${{ vars.API_URL }}
+      TAB_ID: tab-security-scan
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Stop if staging has no address yet
+        run: test -n "$API_URL" || { echo "::error::Set the staging variable API_URL"; exit 1; }
+      - uses: ./.github/actions/python-env
+      - name: Wait for the API (a free Render service sleeps)
+        run: python scripts/smoke_test.py --api "$API_URL"
+      # One script, so the same steps can be run against a local stack: sign in as a guest, keep
+      # the seat alive the way a browser does, fuzz every route, and fail if the session didn't
+      # last the whole scan.
+      - name: Fuzz every route in the schema, signed in as a guest
+        run: bash scripts/scan_api.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: schemathesis-report
+          path: schemathesis-report
+          if-no-files-found: ignore
+          retention-days: 30

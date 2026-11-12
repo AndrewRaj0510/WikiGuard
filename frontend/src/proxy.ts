@@ -27,7 +27,11 @@ export function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     {
-      source: "/((?!api/|_next/static|_next/image|icon.svg|favicon.ico|robots.txt).*)",
+      // Only files that exist are skipped. A skipped path with no file behind it falls through to
+      // the 404 page, which would then go out with no CSP: /favicon.ico and /robots.txt both did
+      // until OWASP ZAP's baseline found it (Phase 6). The icon is icon.svg, and robots.txt comes
+      // from app/robots.ts.
+      source: "/((?!api/|_next/static|_next/image|icon.svg|robots.txt).*)",
       missing: [
         { type: "header", key: "next-router-prefetch" },
         { type: "header", key: "purpose", value: "prefetch" },

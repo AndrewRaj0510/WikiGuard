@@ -60,3 +60,17 @@ pythonpath = [
     "jobs/trainer",
 ]
 markers = ["integration: needs real Postgres or Redpanda, and skips itself when they are not set"]
+
+# Coverage is measured on the code that runs in production: the shared package, the services, and
+# the jobs. Tests and migrations are left out, so they can't raise the number. The trainer runs in
+# its own environment (PyTorch), so its tests aren't part of this measurement.
+[tool.coverage.run]
+source = ["packages/wikiguard_core/wikiguard_core", "services", "jobs"]
+omit = [
+    "*/tests/*",
+    "*/conftest.py",
+    "services/api/api_test_helpers.py",
+    "jobs/migrate/*",
+    "jobs/trainer/*",
+]
+relative_files = true

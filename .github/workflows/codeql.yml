@@ -1,0 +1,44 @@
+# CodeQL reads the code for patterns that lead to vulnerabilities (injection, unsafe
+# deserialization, a secret in a log) and reports them under the repo's Security tab.
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # Weekly, because the queries improve even when the code doesn't change.
+  schedule:
+    - cron: "41 4 * * 2"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  analyze:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      # Needed to upload results. This is the only write permission, and only in this job.
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        # "actions" checks these workflow files themselves, for example for script injection.
+        language: [python, javascript-typescript, actions]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          languages: ${{ matrix.language }}
+          # None of the three languages needs compiling.
+          build-mode: none
+          queries: security-extended
+      - uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          category: /language:${{ matrix.language }}

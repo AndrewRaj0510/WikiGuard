@@ -16,7 +16,7 @@ x-env-file: &env-file
 
 services:
   postgres:
-    image: postgres:17.11-alpine
+    image: postgres:17.11-alpine@sha256:e5d2edd28b1f8d40a0a6c0c9cdc545b19b56a0d5d88f94bc11a97d970d4700d0
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-wikiguard}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
@@ -34,7 +34,7 @@ services:
       retries: 20
 
   redpanda:
-    image: redpandadata/redpanda:v26.2.6
+    image: redpandadata/redpanda:v26.2.6@sha256:8b1076e0d61bfceb66594dc01536427ce0b529f8ead35fdab9763ab6085891ce
     # Two listeners: containers use redpanda:9092, and code on the laptop uses 127.0.0.1:19092.
     # Not localhost, which tried IPv6 first on the laptop and logged a connection failure.
     command:
@@ -79,7 +79,7 @@ services:
     environment:
       DATABASE_URL: postgresql://trainer_login:${COMPOSE_LOGIN_PASSWORD:-${POSTGRES_PASSWORD}}@postgres:5432/${POSTGRES_DB:-wikiguard}
     volumes:
-      - ./data/runs:/runs:ro
+      - ${RUNS_PATH:-./data/runs}:/runs:ro
       - ./scripts/sync_model_versions.py:/app/sync_model_versions.py:ro
     command: ["python", "sync_model_versions.py", "--runs", "/runs"]
     depends_on:
@@ -112,7 +112,7 @@ services:
       LOCAL_RUNS_PATH: /runs
       MODEL_CACHE_DIR: /models/cache
     volumes:
-      - ./data/runs:/runs:ro
+      - ${RUNS_PATH:-./data/runs}:/runs:ro
       - scorer-models:/models/cache
     depends_on:
       redpanda:
@@ -152,7 +152,7 @@ services:
     ports:
       - "127.0.0.1:${API_PORT:-8000}:8000"
     volumes:
-      - ./data/runs:/runs:ro
+      - ${RUNS_PATH:-./data/runs}:/runs:ro
       - api-models:/models/cache
     depends_on:
       migrate:

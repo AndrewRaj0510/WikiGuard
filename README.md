@@ -1,38 +1,86 @@
+<div align="center">
+
 # WikiGuard
 
-A live Wikipedia vandalism detector, designed as a production-style MLOps system that runs entirely on free services.
+WikiGuard is a real-time platform that watches every edit made to English Wikipedia articles and uses deep learning models to score how likely each one is to be vandalism. It ranks the most suspicious edits at the top of a review queue, so volunteer patrollers can check them first, with a one-click AI summary of what each edit changed. It learns from the edits Wikipedia's community undoes, tracks its own accuracy, and retrains itself when it starts to slip.
 
-> **Status: Phase 2 models trained and evaluated.** Five models are trained on a versioned dataset of about 95,000 edits, and the data pipeline runs on a laptop, with live edits going through Redpanda to a parquet archive. Phase 3's scorer and API are built, and the whole pipeline runs locally in Docker Compose against recorded Wikipedia data. Phase 4's Next.js app is built and tested locally: the live feed, review queue, edit pages with Explain and review, model and health pages, sign-in, and the single-seat gate. Phase 5's monitoring and continuous training are built: a daily monitor with drift checks, a retraining pipeline with a promotion gate, shadow scoring, promotion, and rollback. They were shown working on replayed data in a sandbox, not on live traffic. Nothing is deployed, and Explain hasn't been measured against a real LLM. Model results are from a held-out test window, not live traffic. This README is updated as each phase finishes.
+[![CI](https://github.com/AndrewRaj0510/WikiGuard/actions/workflows/ci.yml/badge.svg)](https://github.com/AndrewRaj0510/WikiGuard/actions/workflows/ci.yml)
+![Python 3.11](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)
+![PyTorch](https://img.shields.io/badge/PyTorch-models-EE4C2C?logo=pytorch&logoColor=white)
+![ONNX Runtime](https://img.shields.io/badge/ONNX-int8%20serving-005CED?logo=onnx&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-API-009688?logo=fastapi&logoColor=white)
+![Next.js 16](https://img.shields.io/badge/Next.js-16-000000?logo=nextdotjs&logoColor=white)
+![Cost: $0](https://img.shields.io/badge/infrastructure-free%20tiers-2ea44f)
 
-## What it will do
+[Live site](https://wiki-guard.vercel.app) · [Architecture](#architecture) · [Models](#models) · [Project status](#project-status) · [Development](#development)
 
-1. Read English Wikipedia edits from Wikimedia's public live stream.
-2. Score each edit for vandalism risk with a deep learning model.
-3. Show the riskiest edits first in a review queue for human patrollers.
-4. Offer a one-line LLM explanation of what an edit did.
-5. Use community reverts as free labels, two days later, to measure live accuracy.
-6. Retrain weekly by default (daily or every two weeks are options), and sooner if drift appears, promoting a new model only if it passes a strict gate.
+</div>
 
-WikiGuard never reverts anything itself. A person always decides.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="frontend/public/screenshots/queue-dark.webp">
+  <img alt="The WikiGuard review queue: edits ranked by risk, each with a band, a score, a Logged out label where it applies, and the model that scored it." src="frontend/public/screenshots/queue-light.webp">
+</picture>
 
-## Architecture (planned)
+## What WikiGuard does
 
-```
-Wikimedia EventStreams
-  -> ingestor   filters article edits, fetches diffs, publishes to Redpanda
-  -> scorer     runs the model fallback chain, writes scores to Postgres
-  -> archiver   keeps a rolling 30 days in a parquet archive
-  -> labeler    hourly: collects revert tags as labels
-  -> monitor    daily: live metrics and drift; triggers retraining
-  -> trainer    builds a snapshot, trains, evaluates, and promotes if better
+Anyone can edit Wikipedia, and English Wikipedia articles get about 86,600 edits a day. Most of them are fine. Some are not: a paragraph deleted, a name swapped for an insult, a date quietly changed. Volunteers called patrollers catch these by reading the stream of recent changes, but nobody can read all of them, so some damage stays up until someone happens to notice it.
 
-api       FastAPI: review queue, edit detail, leaderboard, health, /predict, /explain
-frontend  Next.js: live feed, review queue, edit detail, leaderboard, model health
-```
+WikiGuard helps patrollers decide where to look first. It works in four steps:
+
+1. **Watch.** It reads every edit to an English Wikipedia article as it happens, from Wikimedia's public live feed.
+2. **Score.** A neural network reads what the edit removed and what it added, and gives it a risk score.
+3. **Rank.** The riskiest edits go to the top of a review queue. A patroller opens one, sees exactly what changed, and can click **Explain** to get a one-line, plain-English summary of the edit from an LLM. WikiGuard never undoes anything itself. A person always decides.
+4. **Learn.** When the community undoes an edit, Wikipedia tags it as reverted. Two days after each edit, WikiGuard checks for that tag, so it finds out whether its guess was right without anyone labelling data by hand. It uses those answers to check its own accuracy every day, and it retrains itself on a schedule or when new edits start to look different from the ones it learned from. A new model replaces the current one only if it is clearly better, and the old one comes back automatically if the new one does worse on live edits.
+
+> **What the score means.** WikiGuard learns from reverts, and not every revert is vandalism. In a sample of 200 reverted edits, about one in five looked like deliberate damage, and nearly half looked like honest mistakes or low-quality edits. So a high score means "a person should look at this", not "this is vandalism".
+
+### What the project shows
+
+WikiGuard is a portfolio project, built the way a production machine learning system would be, from the live data feed to the deployed app:
+
+- **Live data, not a fixed dataset.** Edits stream in through Redpanda, a Kafka-compatible message queue, and a rolling 30-day archive is kept as parquet files.
+- **Five deep learning models, compared fairly.** An MLP, a BiLSTM with GloVe word vectors, DistilBERT, BERT, and RoBERTa, all in PyTorch. Each one trains on older edits and is tested on the newest ones, so no model sees the future. The best one serves, and the others step in if it fails. Which model is best is decided by the evaluation, never written into the code.
+- **Every experiment on record.** MLflow tracks each training run and holds the model registry, and DVC versions each dataset snapshot, both hosted on DagsHub.
+- **A model that watches itself.** Daily drift and accuracy reports, a strict test before a new model is promoted, a trial period where it scores live edits without being shown, and automatic rollback.
+- **A web app built for untrusted text.** Edits can contain anything, so the Next.js frontend shows them only as plain text, under a strict content security policy, and is tested against a set of XSS attacks and for accessibility (WCAG 2.1 AA). The FastAPI backend checks the user's role on every request.
+- **Real operations.** CI/CD on GitHub Actions with hash-locked dependencies and scanned images, Kubernetes (k3s) deployed by Argo CD, and Prometheus, Grafana, and Alertmanager for monitoring.
+- **Free to run.** Everything runs on free tiers. The only paid part is a small prepaid balance of OpenAI credits for the Explain button.
+
+## Architecture
+
+The target system: color shows where each part runs. [Project status](#project-status) shows which parts are built and which are deployed.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/architecture_dark_2026-11-11.svg">
+  <img alt="WikiGuard architecture. Wikimedia's EventStreams feed the ingestor, which fetches diffs from the MediaWiki API and publishes edits to Redpanda. The scorer writes scores to Postgres on Supabase, the archiver writes every topic to a parquet archive on Oracle Object Storage, and the hourly labeler turns revert tags into labels. Continuous training reads the archive and promotes models in the DagsHub registry, which the scorer and the FastAPI API on Render load. A patroller reaches one Cloudflare Worker address, which sends /api to Render and pages to the Next.js app on Vercel. Explain calls an LLM." src="docs/images/readme/architecture_light_2026-11-11.svg">
+</picture>
+
+| Component | Runs on | Role |
+|---|---|---|
+| `ingestor` | k3s | Reads the `recentchange` stream, keeps human edits to English Wikipedia articles, fetches each diff, and publishes it to `edits.raw` |
+| `scorer` | k3s | Scores each edit with the champion, falling back down the chain when a model fails, and writes scores to Postgres and `edits.scored` |
+| `archiver` | k3s | Writes edits, scores, and labels to compressed parquet in object storage, for a rolling 30 days |
+| `labeler` | k3s CronJob, hourly | Asks the MediaWiki API which edits got the `mw-reverted` tag, and finalizes each label at 48 hours |
+| `monitor` | k3s CronJob, daily | Live metrics, drift, calibration, and slice metrics from the archive. Asks for a retrain or a rollback, and never trains itself |
+| `retrain poller` and `trainer` | k3s Job | Builds a snapshot, trains candidates, runs the promotion gate and a shadow check, and updates the registry aliases |
+| `api` | Render | FastAPI: review queue, edit detail, reviews, model leaderboard, health, `/predict`, and `/explain`. Owns sessions and roles |
+| `frontend` | Vercel | Next.js: landing page, live feed, review queue, edit detail with Explain, model pages, and health |
+| `edge` | Cloudflare Worker | The single site address: `/api` goes to Render and everything else to Vercel, so session cookies stay first-party |
+
+Every change to what serves goes one way: the monitor, or the owner's button in the app, adds a row to `retrain_requests`, and the poller in the cluster acts on it. So the public API never holds cluster credentials. Grafana stays private, and the app draws its own charts from the API.
+
+### The continuous-training loop
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/training_loop_dark_2026-11-11.svg">
+  <img alt="The continuous-training loop: an edit is scored and queued, the community reverts or keeps it, and its label is final at 48 hours. A daily monitor computes live metrics and drift. Drift, decay, or the schedule start a retrain. The promotion gate uses a paired bootstrap, the golden set, and slices: if it fails the champion stays, and if it passes the candidate scores live edits in shadow, then is promoted. A post-promotion check rolls back automatically if it is worse live." src="docs/images/readme/training_loop_light_2026-11-11.svg">
+</picture>
+
+Retraining runs every `RETRAIN_INTERVAL_DAYS` days (7 by default, 1 or 14 as options), and sooner on drift or falling live accuracy. The gate rejected a label-poisoning replay and promoted a better model in a drift replay (see [Project status](#project-status)).
 
 ## Models
 
-Five neural networks are compared on the same data. The champion is chosen by evaluation and is never hard-coded. **It predicts whether an edit is likely to be reverted, which is broader than vandalism.** In a sample of 200 reverts, about one in five looked like deliberate damage, and nearly half looked like good-faith or low-quality edits. The score decides what a person looks at first, and a person always decides.
+Five neural networks are compared on the same data. The champion is chosen by evaluation and is never hard-coded: the registry aliases `champion`, `fallback-1`, `fallback-2`, and so on define the serving chain.
 
 Results on the test window, the newest week: 25,302 edits, 5.89% reverted within 48 hours. All scores come from the quantized file that would be served.
 
@@ -46,53 +94,70 @@ Results on the test window, the newest week: 25,302 edits, 5.89% reverted within
 | Rule baseline | Number to beat | 0.187 (0.171 to 0.203) | 0.28 | | |
 | Constant score | Number to beat | 0.059 | | | |
 
-BERT scores second, but ranks behind the healthy models: quantizing it moved its score by more than the project's 0.005 limit, so tests on the original model stop predicting the served one. On the same 2,000 edits, RoBERTa's PR-AUC is 0.391 and that of Wikimedia's [RevertRisk](https://meta.wikimedia.org/wiki/Machine_learning_models/Production/Language-agnostic_revert_risk) 0.253. RevertRisk wasn't trained on this window or this exact label, so that's a benchmark, not a verdict. Under limits of 0.1 CPU and 512 MB, on this laptop's CPU, RoBERTa peaks at 283 MB and takes 3.4 s at p95.
-
-## Stack
-
-Everything runs on free tiers except OpenAI API credits for the Explain feature. When a limit is reached, the app degrades rather than billing. Limits are confirmed on signup, and some choices are still open.
-
-| Purpose | Service |
-|---|---|
-| Frontend | Next.js on Vercel (Hobby) |
-| API | FastAPI on Render (free) |
-| Database | Postgres on Supabase (free) |
-| Streaming | Redpanda (self-hosted) |
-| Cluster | k3s on Oracle Cloud Always Free ARM |
-| Archive and backups | Oracle Object Storage (Always Free) |
-| Experiments and registry | MLflow and DVC on DagsHub (free) |
-| GPU training | A laptop GPU for the first runs; Colab or Kaggle (free) for retraining |
-| Monitoring | Prometheus, Grafana, and Evidently (self-hosted) |
-| CI/CD | GitHub Actions and Argo CD |
-| LLM | OpenAI API on prepaid credits, with Gemini free tier as backup |
-| Edge protection | Cloudflare Worker (free) |
-| Admin access | Tailscale (free) |
-| Errors and alerts | Sentry, Discord, UptimeRobot, and Healthchecks.io (free tiers) |
-
-## Access
-
-Built and tested locally, not yet deployed. The demo allows one person at a time, in one tab, which keeps it within free limits. The landing page is always open, even when the app is in use.
-
-| Account | Sign-in | Can do |
-|---|---|---|
-| `guest` | Public, one click | View the feed, queue, charts, and explanations. Can't approve edits or change anything. Sessions are limited to 15 minutes. |
-| `user` | Password, owner only | Everything, including approving edits and retraining or rolling back models. |
-
-## Results and screenshots
+PR-AUC is the main measure, because only about 6% of edits are reverted. BERT scores second but ranks behind the healthy models: quantizing it moved its score by more than the project's 0.005 limit, so tests on the original model stop predicting the served one. On the same 2,000 edits, RoBERTa's PR-AUC is 0.391 and that of Wikimedia's [RevertRisk](https://meta.wikimedia.org/wiki/Machine_learning_models/Production/Language-agnostic_revert_risk) 0.253. RevertRisk wasn't trained on this window or this exact label, so that's a benchmark, not a verdict. Under limits of 0.1 CPU and 512 MB, on this laptop's CPU, RoBERTa peaks at 283 MB and takes 3.4 s at p95.
 
 ![PR-AUC with 95% intervals for five models and two baselines on the test window. RoBERTa is highest at 0.364 and a constant score lowest at 0.059.](docs/images/readme/report_leaderboard_2026-11-07.png)
 
 ![Precision against recall for all five models. The models differ most at low recall, where RoBERTa and BERT keep the highest precision, and they converge beyond about 50% recall.](docs/images/readme/eval_pr_curves_all_2026-11-07.png)
 
-![The review queue: edits ranked by risk, each with a band, a score, a Logged out label where it applies, the size of the change, and the model that scored it.](docs/images/readme/app_queue_light_2026-11-09.png)
+## Data
+
+- **Source:** Wikimedia's `recentchange` stream for live edits, and the MediaWiki Action API for diffs, tags, and a 30-day backfill. Scope: English Wikipedia, article namespace, edits only, no bots.
+- **Label:** `1` if the revision is tagged `mw-reverted` within 48 hours, `0` if it is still unreverted after 48 hours.
+- **Splits are by time,** never random: train on older edits, test on the newest week.
+- **Privacy:** editor names and IP addresses are never shown. Editors are stored as a keyed hash, with a flag for logged-out and temporary accounts.
+
+The backfill collected 100,566 edits over 28 days. 6.21% were reverted within 48 hours, and 12.3% of dated reverts came later than that, which is why training uses dated labels and not the raw tag. Logged-out editors made 14% of labeled edits and 55% of reverted ones.
+
+| Split | Window | Edits | Reverted within 48 hours |
+|---|---|---|---|
+| Train | up to Oct 19, 2026 | 44,411 | 6.67% |
+| Validation | Oct 19 to 26 | 25,318 | 6.30% |
+| Test | Oct 26 to Nov 2 | 25,302 | 5.89% |
+
+These are the rows the models were trained and measured on. A snapshot can shrink after that, because rows Wikipedia has since removed are taken out before each push. The published copy has 12 fewer, none of them reverted, and its manifest records each removal and the previous hash.
+
+## The app
 
 ![One edit's page as the owner: the text it removed and added side by side, the review buttons with their keyboard keys, the score on a meter, and the Explain panel.](docs/images/readme/app_edit_owner_light_2026-11-09.png)
 
 ![The Models page: a leaderboard of the five models with 95% intervals as whiskers, and their precision-recall curves.](docs/images/readme/app_models_light_2026-11-09.png)
 
-The app screenshots use the real models and their measured results, with recorded Wikipedia edits whose text was scrubbed for the test fixtures. Grafana screenshots come in Phase 7.
+The screenshots use the real models and their measured results, with recorded Wikipedia edits whose text was scrubbed for the test fixtures.
 
-## Roadmap
+The demo allows one person at a time, in one tab, which keeps it within free limits. The landing page is always open, even when the app is in use. Roles are checked on the server for every request.
+
+| Account | Sign-in | Can do |
+|---|---|---|
+| `guest` | Public, one click | View the feed, queue, charts, and explanations. Can't review edits or change anything. Sessions last up to 15 minutes. |
+| `user` | Password, owner only | Everything, including reviewing edits and retraining, promoting, or rolling back models. |
+
+Keyboard flow: `j`/`k` to move, Enter to open, `v`/`g`/`o`/`s` to review, `n`/`p` for the next or previous edit, `e` for Explain, and `?` for help.
+
+## Tech stack
+
+Everything runs on free tiers except OpenAI API credits for Explain. When a limit is reached, the app degrades rather than billing.
+
+| Layer | Technology |
+|---|---|
+| Models | PyTorch (MLP, BiLSTM + GloVe, DistilBERT, BERT, RoBERTa), exported to ONNX with int8 quantization |
+| Training | A laptop GPU for the first runs. Scheduled retraining runs the three CPU models on the cluster; BERT and RoBERTa retrain from a Colab or Kaggle notebook (free GPUs) |
+| Experiments and data | MLflow registry and DVC on DagsHub |
+| Monitoring | Evidently, Prometheus, Grafana, and Alertmanager |
+| Streaming | Redpanda (Kafka API), self-hosted |
+| Database | Postgres on Supabase, with row-level security on every table |
+| Archive | Parquet on Oracle Object Storage |
+| API | FastAPI on Render |
+| Frontend | Next.js 16, React 19, Tailwind CSS 4, on Vercel |
+| Edge | Cloudflare Worker |
+| Cluster | k3s on Oracle Cloud Always Free (ARM), Argo CD for GitOps |
+| CI/CD | GitHub Actions, GHCR, CodeQL, Trivy, pip-audit, gitleaks, Schemathesis, OWASP ZAP, Dependabot |
+| LLM | OpenAI API on prepaid credits, with Gemini's free tier as backup |
+| Alerts and admin | Sentry, Discord, UptimeRobot, Healthchecks.io, and Tailscale |
+
+## Project status
+
+The project is built phase by phase. Model results are from a held-out test window, not live traffic.
 
 | Phase | Goal | Status |
 |---|---|---|
@@ -100,35 +165,47 @@ The app screenshots use the real models and their measured results, with recorde
 | 1 | Data foundation | Done locally; not yet on Supabase or CI |
 | 2 | Train and evaluate five models | Trained, evaluated, and registered on DagsHub; ARM benchmarks still open |
 | 3 | Serving, API, and Explain | Built and tested locally. Not deployed, and Explain not yet measured on a real LLM |
-| 4 | Frontend | Built and tested locally. The Vercel deploy waits on the owner's account |
+| 4 | Frontend | Done. Live on Vercel at [wiki-guard.vercel.app](https://wiki-guard.vercel.app); the console connects once the API is on Render (Phase 7) |
 | 5 | Monitoring and continuous training | Built and tested locally. Drift-to-promotion and label poisoning replayed on real data in a sandbox; the rollback replay and anything live are still to run |
-| 6 | CI/CD and security | Not started |
+| 6 | CI/CD and security | Built and tested locally: full CI, hash-locked installs, multi-arch image pipeline, threat model. The workflows first run on GitHub when this is pushed; staging and deploys wait for Phase 7 |
 | 7 | Kubernetes and deployment | Not started |
 | 8 | Production hardening | Not started |
 | 9 | Polish and demo | Not started |
 
-## Documentation
+## Repository layout
 
-These documents are kept locally and aren't in this repo, so the links below only work in a local copy. Only the images the README uses are tracked, in `docs/images/readme/`.
+```
+frontend/                 Next.js app (Vercel)
+services/api/             FastAPI public API (Render)
+services/ingestor/        stream consumer
+services/scorer/          scores edits from Kafka
+services/archiver/        writes the parquet archive
+jobs/labeler/             revert-label collector
+jobs/monitor/             live metrics, drift, retrain and rollback requests
+jobs/retrain_poller/      acts on retrain requests in the cluster
+jobs/trainer/             snapshot, training, evaluation, promotion
+jobs/migrate/             Alembic migrations: tables, roles, and row-level security
+jobs/purge/               removes content Wikipedia has hidden
+jobs/retention/           keeps Supabase under its free limit
+packages/wikiguard_core/  shared code: schemas, features, diff parsing, the 5 models,
+                          inference with the fallback chain, MLflow helpers
+notebooks/                Colab and Kaggle notebooks for GPU training
+k8s/                      Helm charts and Argo CD manifests (Phase 7)
+scripts/                  backfill, snapshots, evaluation, and one-off tools
+snapshots/                DVC pointers to the dataset snapshots and the golden set
+tests/                    tests and recorded Wikimedia fixtures
+```
 
-| Document | What's in it |
-|---|---|
-| [PLAN.md](docs/PLAN.md) | Full design and task checklist |
-| [walkthrough.md](docs/walkthrough.md) | Every step from first to last, and why |
-| [decision.md](docs/decision.md) | Choices made and alternatives rejected |
-| [findings.md](docs/findings.md) | What was discovered, with evidence |
-| [evaluation.md](docs/evaluation.md) | How models are judged |
-| [metrics.md](docs/metrics.md) | Measured results |
-| [interview_guide.md](docs/interview_guide.md) | How to explain the project, with questions and answers |
-| [memory.md](docs/memory.md) | Project rules and current state |
+## Development
 
-## Getting started
+These commands are for Windows PowerShell. You need Python 3.11 and Docker Desktop, and Node.js 22 for the frontend.
 
-You need Python 3.11 and Docker Desktop. These commands are for Windows PowerShell.
+### Setup and tests
 
 ```powershell
 py -3.11 -m venv .venv
-.venv\Scripts\python -m pip install -r requirements-dev.txt
+.venv\Scripts\python -m pip install -r requirements-build.txt -r requirements-dev.txt
+.venv\Scripts\python -m pip install --no-deps --no-build-isolation -e packages\wikiguard_core
 .venv\Scripts\pre-commit install
 .venv\Scripts\python -m pytest
 
@@ -145,7 +222,73 @@ $env:TEST_KAFKA_BOOTSTRAP = "127.0.0.1:19092"
 .venv\Scripts\python -m pytest
 ```
 
-Build the dataset, which can stop and resume safely. `WIKIMEDIA_USER_AGENT` and `USER_HASH_KEY` must be set in `.env`:
+Tests never call Wikimedia or the LLM: they use recorded fixtures in `tests/fixtures/`.
+
+### Dependencies
+
+Every Python dependency is locked with its SHA-256. Each service and job has a `requirements.in`, the pins chosen by hand, and a generated `requirements.txt` that lists every package installed with its hashes. Images and CI install with `pip install --require-hashes`, which refuses a package that differs from the one that was locked. To change a dependency, edit the `.in` file and regenerate:
+
+```powershell
+.venv\Scripts\python scripts\lock_requirements.py              # every lock, keeping current versions
+.venv\Scripts\python scripts\lock_requirements.py --upgrade    # also move indirect packages forward
+.venv\Scripts\python scripts\lock_requirements.py --check      # what CI and pre-commit run; no network
+```
+
+The shared package is this repo's own code, so it can't be hash-locked. It's installed with `--no-deps`, after the lock that already holds its dependencies. `jobs/trainer/requirements.txt`, the laptop's GPU set, is the one list installed without hashes.
+
+### Running the whole pipeline locally
+
+`.env` needs its secrets first. Make the password hash with `scripts/hash_password.py`, and wrap it in single quotes in `.env`, because it contains `$` signs. Model files come from `data/runs`.
+
+```powershell
+docker compose up -d --build
+docker compose run --rm labeler
+docker compose run --rm retrain-poller
+```
+
+The API is then at `http://127.0.0.1:8000`, and its schema at `/v1/openapi.json`. This uses the live Wikimedia stream.
+
+To test everything end to end, with recorded data, throwaway secrets, and no `.env`:
+
+```powershell
+.venv\Scripts\python scripts\compose_e2e.py
+.venv\Scripts\python scripts\compose_e2e.py --render-limits   # also at 0.1 CPU and 512 MB
+```
+
+For the integration tests, start `postgres` and `redpanda`, and point `TEST_DATABASE_URL` at a throwaway database, because they delete data.
+
+To measure Explain on a real model, which spends credits: `.venv\Scripts\python scripts\eval_explain.py --provider openai`.
+
+### Frontend
+
+The app calls the API at `/api` on its own address, the way the Cloudflare Worker will serve it, so locally a Next.js rewrite sends `/api` to the API. Open it at `http://localhost:3000`, because the API's CORS allowlist names that address.
+
+```powershell
+cd frontend
+npm ci
+npm test               # unit tests (Vitest)
+npm run lint
+npm run typecheck
+$env:API_ORIGIN = "http://127.0.0.1:8000"   # read when building, never sent to the browser
+npm run build
+npm start
+
+# Checks on a build. None needs a backend: the E2E tests mock the API in the browser.
+npm run check:bundle                 # no secrets in client files; each page within its JS budget
+npx playwright install chromium      # once
+npm run test:e2e                     # flows, XSS corpus, axe, keyboard, headers
+npx lhci autorun                     # Lighthouse budgets on the public pages
+```
+
+Every page renders per request so it can carry a fresh CSP nonce. To screenshot every page against the fixture stack, as guest and owner: `node scripts\capture_screenshots.mjs --password-file data\fixture_stack\user_password.txt`. The model cards and PR curves come from `scripts\export_pr_curves.py SNAPSHOT`, then `scripts\sync_model_versions.py`.
+
+After an API change, refresh the types: `.venv\Scripts\python scripts\export_openapi.py`, then `npm run types` in `frontend/`. `scripts\export_openapi.py --check` fails if the schema file is out of date.
+
+To try it against recorded data with no `.env`, run `.venv\Scripts\python scripts\fixture_stack.py`, which leaves the API at `http://127.0.0.1:8765` with Explain switched off, and build with `API_ORIGIN` set to that. `--down` stops it.
+
+### Building the dataset
+
+The backfill can stop and resume safely. `WIKIMEDIA_USER_AGENT` and `USER_HASH_KEY` must be set in `.env`:
 
 ```powershell
 .venv\Scripts\python scripts\backfill.py --target 2000 --out data\backfill_pilot   # about 15 minutes
@@ -155,19 +298,11 @@ Build the dataset, which can stop and resume safely. `WIKIMEDIA_USER_AGENT` and 
 .venv\Scripts\python scripts\plot_backfill.py data\backfill docs\images --browser "C:\Program Files\Google\Chrome\Application\chrome.exe"
 ```
 
-What the backfill measured: 100,566 edits over 28 days, 6.21% reverted within 48 hours, and 12.3% of dated reverts coming later than that, which is why training uses dated labels and not the raw tag. Logged-out editors make 14% of labeled edits and 55% of reverted ones. Keeping edits for 3 days uses a projected 185 MB, or 37% of Supabase's free limit, at about 86,600 edits a day.
+Keeping edits for 3 days uses a projected 185 MB, or 37% of Supabase's free limit, at about 86,600 edits a day.
 
 ### Dataset snapshots
 
 A snapshot is the exact data the models train on: `edits.parquet` and a `manifest.json` that records its time windows, counts, exclusions, and content hash. Git tracks a small `.dvc` pointer, and [DVC](https://dvc.org) stores the data on DagsHub. Training tools have their own environment, because MLflow's pins conflict with pre-commit's.
-
-| Split | Window | Edits | Reverted within 48 hours |
-|---|---|---|---|
-| Train | up to Oct 19, 2026 | 44,411 | 6.67% |
-| Validation | Oct 19 to 26 | 25,318 | 6.30% |
-| Test | Oct 26 to Nov 2 | 25,302 | 5.89% |
-
-These are the rows the models were trained and measured on. A snapshot can shrink after that, because rows Wikipedia has since removed are taken out before each push. The published copy has 12 fewer, none of them reverted, and its manifest records each removal and the previous hash.
 
 ```powershell
 py -3.11 -m venv .venv-train
@@ -190,7 +325,7 @@ $token = Read-Host "DagsHub token"
 
 If the push can't reach DagsHub, copy the endpoint from the repo's Remote button. Run the `Read-Host` line on its own: if you paste all the lines together, PowerShell takes the next line as the token.
 
-**If Wikipedia hides a revision**, the public copy has to change too. Since Phase 5, `jobs/purge/snapshots.py` does the recheck, rewrite, and push on a schedule (daily from the deletion log, `--full` weekly), for every snapshot and the golden set. You then commit and push the changed `.dvc` files, and its next run deletes the old version, if `SNAPSHOT_GC_ENABLED` is on in its own clone (DEC-070). By hand:
+**If Wikipedia hides a revision**, the public copy has to change too. `jobs/purge/snapshots.py` does the recheck, rewrite, and push on a schedule (daily from the deletion log, `--full` weekly), for every snapshot and the golden set. You then commit and push the changed `.dvc` files, and its next run deletes the old version, if `SNAPSHOT_GC_ENABLED` is on in its own clone. By hand:
 
 ```powershell
 .venv\Scripts\python scripts\recheck_snapshot.py snapshots\NAME
@@ -198,22 +333,6 @@ If the push can't reach DagsHub, copy the endpoint from the repo's Remote button
 .venv-train\Scripts\dvc push
 .venv-train\Scripts\dvc gc --workspace --cloud    # deletes everything the current pointers don't use, including local cached versions
 ```
-
-### Monitoring and continuous training (Phase 5)
-
-Every change to what serves goes one way: the monitor or the owner adds a `retrain_requests` row, and the poller runs `TRAINER_COMMAND` with the request's kind and id (DEC-071). In the cluster these are CronJobs (Phase 7). By hand:
-
-```powershell
-.venv\Scripts\python jobs\monitor\monitor.py                         # daily; Evidently needs the trainer's environment
-.venv\Scripts\python jobs\retrain_poller\poller.py                   # with TRAINER_COMMAND=python -m trainer.lifecycle
-.venv-train\Scripts\python -m trainer.lifecycle retrain --request 12 --run 4
-.venv-train\Scripts\python -m trainer.storage                          # retention, report only; --apply deletes
-.venv-train\Scripts\python -m trainer.reference snapshots\NAME --version 1 --model-folder data\runs\roberta\model
-```
-
-Settings: `RETRAIN_INTERVAL_DAYS` (1, 7, or 14), `RETRAIN_ON_DRIFT`, `RETRAIN_STARTUP_DELAY_SECONDS`, `RETRAIN_MODELS` (CPU models only, DEC-022), `RETRAIN_TIMEOUT_MINUTES`, `RETRAIN_THREADS`, `SHADOW_HOURS`, `SNAPSHOT_GC_ENABLED`, and `STORAGE_ALERT_BYTES`, all in `.env.example`. Migration 0004 adds `shadow_scores`, so run the migrations again.
-
-To replay the loops in a sandbox, against a throwaway Postgres (never Supabase): `.venv-train\Scripts\python scripts\simulate_continuous_training.py drift --admin-url postgresql://USER:PASSWORD@127.0.0.1:5434/postgres`. The other scenarios are `poisoning` and `rollback`. It reads no `.env`, and only reads `data/runs`.
 
 ### Training and evaluation
 
@@ -242,6 +361,22 @@ docker run --rm --cpus=0.1 --memory=512m -v "${PWD}\data\runs:/runs" wikiguard-b
 ```
 
 The golden set, `snapshots/golden-set-v1/`, is a frozen set of 200 edits that later retrains are checked against. Its labels were made by Claude and reviewed by the owner. It's tracked and pushed like a snapshot.
+
+### Monitoring and continuous training
+
+The monitor or the owner adds a `retrain_requests` row, and the poller runs `TRAINER_COMMAND` with the request's kind and id. In the cluster these are CronJobs (Phase 7). By hand:
+
+```powershell
+.venv\Scripts\python jobs\monitor\monitor.py                         # daily; Evidently needs the trainer's environment
+.venv\Scripts\python jobs\retrain_poller\poller.py                   # with TRAINER_COMMAND=python -m trainer.lifecycle
+.venv-train\Scripts\python -m trainer.lifecycle retrain --request 12 --run 4
+.venv-train\Scripts\python -m trainer.storage                          # retention, report only; --apply deletes
+.venv-train\Scripts\python -m trainer.reference snapshots\NAME --version 1 --model-folder data\runs\roberta\model
+```
+
+Settings: `RETRAIN_INTERVAL_DAYS` (1, 7, or 14), `RETRAIN_ON_DRIFT`, `RETRAIN_STARTUP_DELAY_SECONDS`, `RETRAIN_MODELS` (CPU models only), `RETRAIN_TIMEOUT_MINUTES`, `RETRAIN_THREADS`, `SHADOW_HOURS`, `SNAPSHOT_GC_ENABLED`, and `STORAGE_ALERT_BYTES`, all in `.env.example`. Migration 0004 adds `shadow_scores`, so run the migrations again.
+
+To replay the loops in a sandbox, against a throwaway Postgres (never Supabase): `.venv-train\Scripts\python scripts\simulate_continuous_training.py drift --admin-url postgresql://USER:PASSWORD@127.0.0.1:5434/postgres`. The other scenarios are `poisoning` and `rollback`. It reads no `.env`, and only reads `data/runs`.
 
 ### Supabase
 
@@ -280,65 +415,45 @@ Do these for each project, staging first:
 | `api_login` | `wikiguard_api` | API | Phase 3 |
 | `trainer_login` | `wikiguard_trainer` | Retrain-request poller, then trainer and monitor | Phase 3 |
 
-### Running the whole pipeline locally
+### CI, delivery, and releases
 
-`.env` needs its secrets first. Make the password hash with `scripts/hash_password.py`, and wrap it in single quotes in `.env`, because it contains `$` signs. Model files come from `data/runs`.
+Workflows are in `.github/workflows/`. Every action is pinned to a commit, the token is read-only unless a job says otherwise, and CI holds no secrets, so a pull request from a fork runs the same checks with nothing to take. `tests/test_pipeline_rules.py` fails the build if a workflow, Dockerfile, or lock file breaks one of these rules.
 
-```powershell
-docker compose up -d --build
-docker compose run --rm labeler
-docker compose run --rm retrain-poller
-```
+| Workflow | When | What |
+|---|---|---|
+| `ci.yml` | Every pull request and push, and weekly | Lint and types; the Python suite on real Postgres and Redpanda, with coverage gates of 80% for the shared package and 70% for each service and job; the trainer's tests and a training smoke test on CPU PyTorch; the Compose end-to-end test; a build and Trivy scan of every image; the frontend checks; `pip-audit` and `npm audit`; gitleaks. A pull request runs only the jobs its files can affect |
+| `codeql.yml` | Every pull request and push, and weekly | Code scanning for Python, TypeScript, and the workflows themselves |
+| `cd.yml` | After CI passes on `main` | Builds every image for amd64 and arm64, scans it, and publishes it to GHCR. Then migrates, deploys, and smoke-tests staging, and repeats for production |
+| `security-scan.yml` | By hand, and before a release | OWASP ZAP baseline and Schemathesis API fuzzing against staging |
+| `release.yml` | A `vX.Y.Z` tag | Gives the tested images the version name and publishes the changelog entry |
 
-The API is then at `http://127.0.0.1:8000`, and its schema at `/v1/openapi.json`. This uses the live Wikimedia stream.
+The deploy half of `cd.yml` stays off until the repository variable `DEPLOY_ENABLED` is `true` (Phase 7). It needs two GitHub environments, `staging` and `production`, each with the secrets `DATABASE_MIGRATIONS_URL` and `RENDER_DEPLOY_HOOK_URL` and the variable `API_URL`.
 
-To test everything end to end, with recorded data, throwaway secrets, and no `.env`:
-
-```powershell
-.venv\Scripts\python scripts\compose_e2e.py
-.venv\Scripts\python scripts\compose_e2e.py --render-limits   # also at 0.1 CPU and 512 MB
-```
-
-For the integration tests, start `postgres` and `redpanda`, and point `TEST_DATABASE_URL` at a throwaway database, because they delete data.
-
-To measure Explain on a real model, which spends credits: `.venv\Scripts\python scripts\eval_explain.py --provider openai`.
-
-### Frontend
-
-You need Node.js 22. The app calls the API at `/api` on its own address, the way the Cloudflare Worker will serve it, so locally a Next.js rewrite sends `/api` to the API. Open it at `http://localhost:3000`, because the API's CORS allowlist names that address.
+To rehearse CI's heavier jobs locally:
 
 ```powershell
-cd frontend
-npm ci
-npm test               # unit tests (Vitest)
-npm run lint
-npm run typecheck
-$env:API_ORIGIN = "http://127.0.0.1:8000"   # read when building, never sent to the browser
-npm run build
-npm start
-
-# Checks on a build. None needs a backend: the E2E tests mock the API in the browser.
-npm run check:bundle                 # no secrets in client files; each page within its JS budget
-npx playwright install chromium      # once
-npm run test:e2e                     # flows, XSS corpus, axe, keyboard, headers
-npx lhci autorun                     # Lighthouse budgets on the public pages
+.venv-train\Scripts\python scripts\make_tiny_runs.py data	iny_runs       # training smoke test and ONNX parity
+.venv\Scripts\python scripts\compose_e2e.py --runs data	iny_runs          # the end-to-end test, as CI runs it
+.venv\Scripts\python scripts\smoke_test.py --api http://127.0.0.1:8765     # the deploy smoke test, on the fixture stack
+API_URL=http://127.0.0.1:8765 bash scripts/scan_api.sh                     # the staging API scan, on the fixture stack
+bash scripts/protect_main.sh                                               # shows the branch protection it would set
 ```
 
-Every page renders per request so it can carry a fresh CSP nonce (DEC-065). To screenshot every page against the fixture stack, as guest and owner: `node scripts\capture_screenshots.mjs --password-file data\fixture_stack\user_password.txt`. The model cards and PR curves come from `scripts\export_pr_curves.py SNAPSHOT`, then `scripts\sync_model_versions.py`.
+To release, move the notes under "Unreleased" in [CHANGELOG.md](CHANGELOG.md) to a new version heading, merge, wait for CD, then `git tag -a v0.6.0 -m "v0.6.0"` and `git push origin v0.6.0`.
 
-After an API change, refresh the types: `.venv\Scripts\python scripts\export_openapi.py`, then `npm run types` in `frontend/`. `scripts\export_openapi.py --check` fails if the schema file is out of date.
+### Deploying the frontend to Vercel
 
-To try it against recorded data with no `.env`, run `.venv\Scripts\python scripts\fixture_stack.py`, which leaves the API at `http://127.0.0.1:8765` with Explain switched off, and build with `API_ORIGIN` set to that. `--down` stops it.
-
-### Deploying the frontend to Vercel (owner)
+The frontend is deployed at [wiki-guard.vercel.app](https://wiki-guard.vercel.app) on the Hobby plan, and every push to `main` deploys again. To set it up from scratch:
 
 1. In Vercel, import the GitHub repo, and set **Root Directory** to `frontend`. Vercel detects Next.js, and `package.json` asks for Node 22.
-2. Leave `API_ORIGIN` unset until the API is on Render (Phase 7). Until then, only the landing and privacy pages work there; the console says it can't reach the API. Set no `NEXT_PUBLIC_` variable: none is needed, and anything in one reaches every browser.
-3. Deploy, then check one page's headers for `content-security-policy` with a nonce. `npm run check:bundle` and the E2E suite run in CI on every push.
+2. Add no environment variables. In production the Cloudflare Worker sends `/api` to Render, so Vercel never needs `API_ORIGIN`, and anything in a `NEXT_PUBLIC_` variable reaches every browser.
+3. Deploy, then check one page's headers for `content-security-policy` with a nonce: `curl -sI https://wiki-guard.vercel.app/`.
 
-In Phase 7 the Cloudflare Worker becomes the one address: `/api` goes to Render with the prefix stripped, and everything else to Vercel.
+Until the API is on Render (Phase 7), only the landing and privacy pages work there; the console says it can't reach the API.
 
-More setup steps will be added as the project grows. The accounts and tools the project needs are listed at the start of Part 2 in [PLAN.md](docs/PLAN.md).
+## Design notes
+
+The design notes are kept locally and aren't in this repo: the full plan and task list, a step-by-step walkthrough, the threat model and privacy record, 82 recorded decisions with the alternatives rejected, findings with their evidence, the evaluation method, and every measured result. Only the images this README uses are tracked, in `docs/images/readme/`.
 
 ## Data and attribution
 

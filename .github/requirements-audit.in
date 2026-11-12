@@ -1,0 +1,3 @@
+# CI only: pip-audit checks every lock file against the Python advisory database. Kept apart from
+# requirements-dev.in so its own dependencies can't change what the tests run with.
+pip-audit==2.10.1

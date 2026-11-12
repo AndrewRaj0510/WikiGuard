@@ -1,0 +1,3 @@
+# What builds packages/wikiguard_core into a wheel. Locked like everything else, because pip's
+# default is to download the newest build tools, unpinned, every time it builds.
+setuptools==84.2.1

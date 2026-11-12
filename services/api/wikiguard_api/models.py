@@ -238,3 +238,21 @@ class AuditEntry(Closed):
 class AuditPage(Closed):
     items: list[AuditEntry]
     next_cursor: str | None
+
+
+class FieldError(BaseModel):
+    field: str
+    message: str
+
+
+class ProblemDetails(BaseModel):
+    """Every error the API sends, in one format (RFC 9457), as application/problem+json."""
+
+    type: str
+    title: str
+    status: int
+    code: str
+    request_id: str | None
+    detail: str | None = None
+    # Only on a 422: which fields were wrong and why, never the values that were sent.
+    errors: list[FieldError] | None = None
