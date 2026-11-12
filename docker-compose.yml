@@ -16,7 +16,7 @@ x-env-file: &env-file
 
 services:
   postgres:
-    image: postgres:17.11-alpine@sha256:e5d2edd28b1f8d40a0a6c0c9cdc545b19b56a0d5d88f94bc11a97d970d4700d0
+    image: postgres:18.0-alpine@sha256:48c8ad3a7284b82be4482a52076d47d879fd6fb084a1cbfccbd551f9331b0e40
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-wikiguard}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
