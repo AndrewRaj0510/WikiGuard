@@ -254,6 +254,15 @@ jobs:
           node-version: "22"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
+      # The npm that package.json names, which is also the one Dependabot writes lock files with.
+      # Node 22 bundles npm 10, which wants optional peer entries npm 11 leaves out, so a lock file
+      # from one fails `npm ci` on the other (F-154).
+      - name: npm from package.json's packageManager
+        run: |
+          wanted="$(node -p 'require("./package.json").packageManager')"
+          # An exact npm version and nothing else, so this line can only ever install npm.
+          [[ "$wanted" =~ ^npm@[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "packageManager: $wanted"; exit 1; }
+          npm install --global "$wanted"
       # npm ci installs exactly what package-lock.json lists, and checks each package's hash.
       - run: npm ci
       - name: The frontend's types match the schema (contract drift fails here)

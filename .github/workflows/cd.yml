@@ -27,10 +27,14 @@ env:
 
 jobs:
   # Only a successful CI run of a push to main goes further. The weekly and manual CI runs don't.
+  # The jobs below check out the commit that CI run tested (workflow_run.head_sha). A push to
+  # main can only come from this repository, and each job that checks out that commit says so
+  # again itself, so no job here can ever build a fork's code (code scanning, F-155).
   gate:
     if: >-
       github.event.workflow_run.conclusion == 'success'
       && github.event.workflow_run.event == 'push'
+      && github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-24.04
     outputs:
       prefix: ${{ steps.names.outputs.prefix }}
@@ -56,7 +60,9 @@ jobs:
   # several times slower. The cluster is arm64 and Render is amd64, so both are needed.
   build:
     needs: gate
-    if: needs.gate.outputs.images_only != 'true'
+    if: >-
+      needs.gate.outputs.images_only != 'true'
+      && github.event.workflow_run.head_repository.full_name == github.repository
     strategy:
       fail-fast: false
       matrix:
@@ -293,6 +299,7 @@ jobs:
 
   smoke-staging:
     needs: deploy-staging
+    if: github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-24.04
     environment: staging
     env:
@@ -337,6 +344,7 @@ jobs:
 
   smoke-production:
     needs: deploy-production
+    if: github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-24.04
     environment: production
     env:

@@ -266,6 +266,8 @@ To measure Explain on a real model, which spends credits: `.venv\Scripts\python 
 
 The app calls the API at `/api` on its own address, the way the Cloudflare Worker will serve it, so locally a Next.js rewrite sends `/api` to the API. Open it at `http://localhost:3000`, because the API's CORS allowlist names that address.
 
+The lock file is written with npm 11.21.2, the version `package.json` names and CI and Dependabot use. Node 22's own npm 10 rejects it, so install that npm once: `npm install --global npm@11.21.2`.
+
 ```powershell
 cd frontend
 npm ci

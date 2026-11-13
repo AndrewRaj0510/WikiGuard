@@ -85,8 +85,15 @@ tested images the version name and publishes these notes.
 - A `.dockerignore` keeps everything except the code out of image builds.
 - The API reads the visitor's address from the Worker's own `x-wikiguard-client-ip` header, still
   only with the edge secret, instead of `cf-connecting-ip`.
+- Frontend: Next.js 16.4.6, React 19.3.1, jsdom 31, and four other patch and minor updates.
+  The frontend is installed with npm 11.21.2 (`packageManager`), the npm Dependabot uses, in CI
+  too. Dependabot no longer offers Python past 3.11, Postgres past 17, or majors of TypeScript,
+  ESLint, and `@types/node` that the toolchain can't take yet.
 
 ### Fixed
+- Every Dependabot frontend pull request failed `npm ci`: Dependabot writes lock files with npm
+  11, and CI installed with Node 22's npm 10, which wants entries npm 11 leaves out.
+- Two trainer tests that failed on Linux runners for toy-model numerics, not a bug.
 - `/favicon.ico` and `/robots.txt` answered with a 404 page that had no Content-Security-Policy. Found by OWASP ZAP.
 - The HTTP client's request log, which wrote whole URLs, including usernames and, in the jobs that
   alert, the Discord webhook and Healthchecks.io URLs. Its records below WARNING are now dropped.
@@ -95,6 +102,8 @@ tested images the version name and publishes these notes.
 - Workflows hold no secrets on pull requests, use a read-only token by default, and pin every
   action to a commit. Tests in the suite fail if a workflow, Dockerfile, or lock file breaks
   these rules.
+- CD's jobs that check out the tested commit also require it to come from this repository, and
+  the end-to-end stacks' throwaway credentials are written owner-only. Both from code scanning.
 
 ## [0.5.0] - 2026-11-11
 

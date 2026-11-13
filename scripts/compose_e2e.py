@@ -13,6 +13,7 @@ CI runs this on every change, with the model scripts/make_tiny_runs.py trains (.
 
 import argparse
 import json
+import os
 import secrets
 import subprocess
 import sys
@@ -36,6 +37,20 @@ GRACEFUL_STOP_SECONDS = 25
 # Budgets for serving images, with room to grow: going over means something heavy got in, such as
 # PyTorch, which alone would add over 700 MB. Models aren't in these images.
 IMAGE_BUDGET_MB = {"scorer": 550.0, "api": 550.0, "ingestor": 275.0, "archiver": 500.0}
+
+
+def write_private(path: Path, text: str) -> None:
+    """Write a file only its owner can read (0600), for the throwaway test credentials below.
+
+    Compose reads them from a file, and the screenshot script reads the login password from one,
+    so they're written down. They're random per run and open only a local test stack, but no other
+    account on the machine needs to see them. Windows ignores the mode; there the file sits in the
+    user's own folder.
+    """
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as file:
+        file.write(text)
+    os.chmod(path, 0o600)  # O_CREAT's mode applies only to a new file, not one already there
 
 
 def write_env(folder: Path, runs: Path | None = None) -> tuple[Path, str]:
@@ -65,7 +80,7 @@ def write_env(folder: Path, runs: Path | None = None) -> tuple[Path, str]:
         values["RUNS_PATH"] = runs.resolve().as_posix()
     path = folder / "e2e.env"
     values["APP_ENV_FILE"] = path.as_posix()
-    path.write_text("".join(f"{key}={value}\n" for key, value in values.items()), "utf-8")
+    write_private(path, "".join(f"{key}={value}\n" for key, value in values.items()))
     return path, user_password
 
 

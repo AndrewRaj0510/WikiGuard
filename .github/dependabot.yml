@@ -31,10 +31,22 @@ updates:
     schedule: { interval: weekly }
     groups:
       base-images: { patterns: ["*"] }
+    # The project is on Python 3.11 (CLAUDE.md), and Dependabot reads 3.11 to 3.15 as a minor
+    # update. Moving Python is a decision, not a routine bump. The 3.11 digest still updates.
+    ignore:
+      - dependency-name: python
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
 
   - package-ecosystem: docker-compose
     directory: /
     schedule: { interval: weekly }
+    ignore:
+      - dependency-name: python
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      # Local Postgres matches Supabase's major version (17, docs/findings.md). 18 also moves the
+      # data folder inside the image, so an existing volume wouldn't be found.
+      - dependency-name: postgres
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: pip
     directories:
@@ -60,6 +72,8 @@ updates:
         update-types: [minor, patch]
     open-pull-requests-limit: 5
 
+  # Lock files are written with npm 11, and CI installs the same npm, from package.json's
+  # packageManager field. With Node 22's own npm 10, `npm ci` rejects them (F-154).
   - package-ecosystem: npm
     directory: /frontend
     schedule: { interval: weekly }
@@ -67,3 +81,14 @@ updates:
       frontend:
         update-types: [minor, patch]
     open-pull-requests-limit: 5
+    # Major versions that can't work yet (checked 2026-11-13, F-154). Lift each one when its reason goes.
+    ignore:
+      # The runtime is Node 22 (CLAUDE.md), so its types stay on 22.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      # openapi-typescript, which writes the API's types, accepts only TypeScript 5.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
+      # eslint-config-next's import plugin accepts ESLint up to 9.
+      - dependency-name: eslint
+        update-types: ["version-update:semver-major"]

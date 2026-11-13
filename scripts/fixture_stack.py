@@ -40,7 +40,7 @@ def main() -> int:
         return 0
 
     env_file, user_password = e2e.write_env(FOLDER, args.runs)
-    (FOLDER / "user_password.txt").write_text(user_password, "utf-8")
+    e2e.write_private(FOLDER / "user_password.txt", user_password)
     stack = e2e.Stack(env_file)
     stack.clean()
     stack.run("up", "-d", "--build", timeout=1800)
