@@ -92,6 +92,8 @@ class EditPage(Closed):
     items: list[EditSummary]
     next_cursor: str | None
     stale: bool
+    # "snapshot" when the edits are a fixed, already-scored dataset, not the live stream (DEC-091).
+    data_mode: Literal["live", "snapshot"]
 
 
 class ScoreInfo(Closed):
@@ -155,6 +157,11 @@ class BreakerInfo(Closed):
 
 class HealthSummary(Closed):
     stale: bool
+    # In "snapshot" mode the counts cover the whole dataset, which runs from data_from to data_to,
+    # not the last 24 hours (DEC-091).
+    data_mode: Literal["live", "snapshot"]
+    data_from: datetime | None
+    data_to: datetime | None
     scored_last_24h: int
     fallback_rate_24h: float | None
     load_shed_rate_24h: float | None

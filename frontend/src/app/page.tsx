@@ -22,8 +22,8 @@ const FACTS = [
 const STEPS = [
   {
     band: "low" as const,
-    title: "Every edit, as it happens",
-    text: "Wikimedia's public stream feeds each English Wikipedia article edit through a fallback chain of models.",
+    title: "Every edit, scored",
+    text: "A streaming pipeline reads Wikimedia's public stream and scores each article edit through a fallback chain of models. It runs on Kubernetes on the owner's machine; the demo serves a scored snapshot.",
   },
   {
     band: "elevated" as const,
@@ -33,13 +33,22 @@ const STEPS = [
   {
     band: "flagged" as const,
     title: "A person decides",
-    text: "WikiGuard never reverts anything. Community reverts become its labels, the basis for measuring live accuracy and for retraining.",
+    text: "WikiGuard never reverts anything. Community reverts become its labels, the basis for measuring accuracy and for retraining.",
   },
 ];
 
-// Built so far. Monitoring, retraining, and the cluster are listed as next, not as done.
-const BUILT = ["PyTorch → ONNX int8", "Redpanda", "FastAPI", "Postgres", "MLflow + DVC", "Next.js"];
-const NEXT = ["Evidently drift checks", "Automated retraining", "k3s + Argo CD"];
+// Built and tested. The cluster runs on kind on the owner's machine, not on a server (DEC-091).
+const BUILT = [
+  "PyTorch → ONNX int8",
+  "Redpanda",
+  "FastAPI",
+  "Postgres",
+  "MLflow + DVC",
+  "Evidently drift checks",
+  "Automated retraining",
+  "Kubernetes + Helm (kind)",
+  "Next.js",
+];
 
 export default function LandingPage() {
   return (
@@ -61,7 +70,7 @@ export default function LandingPage() {
           <section className="grid gap-12 pt-14 pb-14 sm:pt-20 lg:grid-cols-[minmax(0,1fr)_26rem] lg:items-end">
             <div className="max-w-3xl animate-rise">
               <p className="text-[11px] font-medium tracking-[0.16em] text-risk-flagged uppercase">
-                Live vandalism triage for English Wikipedia
+                Vandalism triage for English Wikipedia
               </p>
               <h1 className="mt-4 font-display text-[44px] leading-[1.02] font-medium tracking-[-0.02em] sm:text-[64px]">
                 Every edit scored.
@@ -69,9 +78,10 @@ export default function LandingPage() {
                 <span className="italic">The worst</span> ones first.
               </h1>
               <p className="mt-6 max-w-xl text-[17px] leading-relaxed text-muted-foreground">
-                WikiGuard reads every article edit from Wikipedia&rsquo;s public stream, scores it
-                with a deep learning model, and puts the riskiest at the top of a review queue for
-                human patrollers.
+                WikiGuard scores English Wikipedia article edits with a deep learning model and
+                puts the riskiest at the top of a review queue for human patrollers. This demo
+                serves 25,294 real edits from late October 2026, each scored by the champion
+                model, with its real revert label.
               </p>
             </div>
             <SignInOptions />
@@ -132,21 +142,16 @@ export default function LandingPage() {
               A production-style MLOps system, on free tiers
             </h2>
             <p className="mt-2 max-w-2xl text-[14.5px] leading-relaxed text-muted-foreground">
-              Streaming ingestion, five models with a fallback chain, and an experiment registry
-              are built. Drift monitoring, automated retraining, and the cluster come next. It all
-              runs at no cost except the language model behind Explain.
+              Streaming ingestion, five models with a fallback chain, an experiment registry,
+              drift monitoring, automated retraining, and a Kubernetes chart, all built and tested.
+              No free server can run the pipeline around the clock, so it runs on the owner&rsquo;s
+              machine, and this demo serves its scored results. It all costs nothing except the
+              language model behind Explain.
             </p>
             <ul className="mt-5 flex flex-wrap gap-2" aria-label="Built">
               {BUILT.map((item) => (
                 <li key={item} className="rounded-md border bg-card px-2.5 py-1 font-mono text-[12px]">
                   {item}
-                </li>
-              ))}
-            </ul>
-            <ul className="mt-2 flex flex-wrap gap-2" aria-label="Next">
-              {NEXT.map((item) => (
-                <li key={item} className="rounded-md border border-dashed px-2.5 py-1 font-mono text-[12px] text-muted-foreground">
-                  next: {item}
                 </li>
               ))}
             </ul>

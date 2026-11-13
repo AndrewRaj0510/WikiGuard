@@ -1,0 +1,29 @@
+# Prometheus, Alertmanager, and Grafana: the chart from its own repo, the values from this one.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: monitoring
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: https://prometheus-community.github.io/helm-charts
+      chart: kube-prometheus-stack
+      targetRevision: 93.2.2
+      helm:
+        releaseName: kps
+        valueFiles:
+          - $repo/k8s/platform/monitoring-values.yaml
+    - repoURL: https://github.com/AndrewRaj0510/WikiGuard.git
+      targetRevision: main
+      ref: repo
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      # The Prometheus CRDs are too big for a client-side apply's annotation.
+      - ServerSideApply=true

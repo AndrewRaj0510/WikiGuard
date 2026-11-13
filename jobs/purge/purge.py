@@ -14,12 +14,11 @@ import sys
 from collections import Counter
 from collections.abc import Iterable
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from typing import Any
 
 import psycopg
 from psycopg.types.json import Jsonb
-from wikiguard_core.archive import purge_references, purge_revisions
+from wikiguard_core.archive import Root, open_archive, purge_references, purge_revisions
 from wikiguard_core.config import (
     ArchiveSettings,
     CommonSettings,
@@ -93,7 +92,7 @@ def hidden_states(client: WikimediaClient, rev_ids: Iterable[int]) -> list[Revis
 def run(
     connection: psycopg.Connection[Any],
     client: WikimediaClient,
-    archive_root: Path,
+    archive_root: Root,
     now: datetime | None = None,
 ) -> Counter[str]:
     now = now or datetime.now(UTC)
@@ -136,7 +135,7 @@ def main() -> int:
     with psycopg.connect(
         settings.database_url.get_secret_value(), prepare_threshold=None, connect_timeout=10
     ) as connection:
-        results = run(connection, client, Path(settings.archive_path))
+        results = run(connection, client, open_archive(settings))
     client.close()
     logger.info("Purge finished: %s", dict(results))
     return 0

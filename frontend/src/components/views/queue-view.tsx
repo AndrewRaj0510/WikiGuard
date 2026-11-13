@@ -95,6 +95,7 @@ export function QueueView() {
   }
 
   const items = first.data ? mergePages(first.data, older?.pages ?? []) : [];
+  const snapshot = first.data?.data_mode === "snapshot";
   const nextCursor = (older?.pages.at(-1) ?? first.data)?.next_cursor;
   const order = items.map((item) => item.rev_id).join(",");
 
@@ -112,13 +113,14 @@ export function QueueView() {
       <PageHeader
         eyebrow="Patrol"
         title="Review queue"
-        lede="Unreviewed edits from the last three days, riskiest first. Logged-out edits rank with the rest and carry a label. WikiGuard never reverts anything: a person decides."
+        lede={`Unreviewed edits ${snapshot ? "from the demo’s dataset" : "from the last three days"}, riskiest first. Logged-out edits rank with the rest and carry a label. WikiGuard never reverts anything: a person decides.`}
         aside={
           <LiveStatus
             paused={first.paused}
             error={first.error}
             updatedAt={first.updatedAt}
             serverStale={first.data?.stale}
+            snapshot={snapshot}
           />
         }
       />
@@ -148,7 +150,7 @@ export function QueueView() {
           (items.length === 0 ? (
             <EmptyState title="The queue is clear">
               {editor === "all"
-                ? "No unreviewed scored edits from the last three days."
+                ? `No unreviewed scored edits ${snapshot ? "in the dataset" : "from the last three days"}.`
                 : "No unreviewed edits from this group. Try “All editors”."}
             </EmptyState>
           ) : (

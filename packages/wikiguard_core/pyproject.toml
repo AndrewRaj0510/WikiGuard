@@ -15,6 +15,8 @@ kafka = ["confluent-kafka>=2.16,<3"]
 archive = ["pyarrow>=26,<27"]
 db = ["psycopg[binary]>=3.3,<4"]
 ops = ["prometheus-client>=0.26,<1"]
+# Error tracking, imported only when SENTRY_DSN is set.
+errors = ["sentry-sdk>=2.75,<3"]
 # Scoring with an exported model. Serving images install this, and never PyTorch.
 serve = ["numpy>=2,<3", "onnxruntime>=1.31,<2", "tokenizers>=0.21,<1"]
 # Training only: everything serving must never need. PyTorch's GPU build comes from its own index,

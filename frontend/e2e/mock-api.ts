@@ -31,6 +31,8 @@ const SAFE_EDITS: MockEdit[] = [
 export interface MockOptions {
   edits?: MockEdit[];
   explanation?: string;
+  /** "snapshot" serves the demo's fixed dataset, as the deployed API does (DEC-091). */
+  dataMode?: "live" | "snapshot";
 }
 
 export class MockApi {
@@ -41,9 +43,11 @@ export class MockApi {
   calls: { method: string; path: string; body: unknown; headers: Record<string, string> }[] = [];
   edits: MockEdit[];
   explanation: string;
+  dataMode: "live" | "snapshot";
 
   constructor(options: MockOptions = {}) {
     this.edits = options.edits ?? SAFE_EDITS;
+    this.dataMode = options.dataMode ?? "live";
     this.explanation = options.explanation ?? "Changed the birth year from 1816 to 1815.";
   }
 
@@ -144,11 +148,11 @@ export class MockApi {
         .filter((e) => editor === "all" || e.is_anonymous === (editor === "logged_out"))
         .sort((a, b) => b.score - a.score)
         .map((e) => this.summary(e));
-      return json(200, { items, next_cursor: null, stale: false });
+      return json(200, { items, next_cursor: null, stale: false, data_mode: this.dataMode });
     }
     if (path === "/v1/feed") {
       const items = [...this.edits].sort((a, b) => a.minutes_ago - b.minutes_ago).map((e) => this.summary(e));
-      return json(200, { items, next_cursor: null, stale: false });
+      return json(200, { items, next_cursor: null, stale: false, data_mode: this.dataMode });
     }
     const review = /^\/v1\/edits\/(\d+)\/review$/.exec(path);
     if (review && method === "PUT") {
@@ -203,7 +207,17 @@ export class MockApi {
       });
     }
     if (path === "/v1/models") return json(200, { items: MODELS, stale: false });
-    if (path === "/v1/health/summary") return json(200, HEALTH);
+    if (path === "/v1/health/summary") {
+      if (this.dataMode === "live") return json(200, HEALTH);
+      return json(200, {
+        ...HEALTH,
+        data_mode: "snapshot",
+        data_from: "2026-10-26T20:52:42Z",
+        data_to: "2026-11-02T19:54:48Z",
+        // Scored once, weeks ago: a snapshot must not read as a stopped scorer.
+        last_scored_at: "2026-11-13T10:00:00Z",
+      });
+    }
     if (path.startsWith("/v1/admin/")) {
       if (this.role !== "user") return problem(403, "forbidden");
       if (method === "GET") return json(200, { items: [] });
@@ -257,6 +271,9 @@ export const MODELS = [
 
 export const HEALTH = {
   stale: false,
+  data_mode: "live",
+  data_from: null,
+  data_to: null,
   scored_last_24h: 1200,
   fallback_rate_24h: 0.01,
   load_shed_rate_24h: 0,

@@ -1,0 +1,213 @@
+{{- if .Values.network.enabled }}
+{{- /*
+Default deny, in and out, for every pod in the namespace. Then each path is opened for the pods
+that carry its label, and each component's labels come from its `egress` list in values.yaml:
+
+  wikiguard.dev/internet  HTTPS to public addresses (Wikimedia, DagsHub, Oracle, Discord, ...)
+  wikiguard.dev/database  Postgres: Supabase on the internet, or the local one on kind
+  wikiguard.dev/redpanda  the Kafka API, and Redpanda accepts only these pods
+  wikiguard.dev/kubeApi   the Kubernetes API: only the retrain poller
+  wikiguard.dev/scraped   Prometheus may reach /metrics on 8000
+
+A policy can't name hosts, so "the internet" is every public address on port 443. What it rules
+out is the private side: other pods, the node, the cloud metadata address, and the tailnet.
+*/}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  labels:
+    {{- include "wikiguard.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  labels:
+    {{- include "wikiguard.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-internet
+  labels:
+    {{- include "wikiguard.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      wikiguard.dev/internet: "true"
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              {{- toYaml .Values.network.internetExcept | nindent 14 }}
+      ports:
+        - { protocol: TCP, port: 443 }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-database
+  labels:
+    {{- include "wikiguard.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      wikiguard.dev/database: "true"
+  policyTypes: [Egress]
+  egress:
+    {{- if .Values.network.database.external }}
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              {{- toYaml .Values.network.internetExcept | nindent 14 }}
+      ports:
+        {{- range .Values.network.database.ports }}
+        - { protocol: TCP, port: {{ . }} }
+        {{- end }}
+    {{- end }}
+    {{- if .Values.devDatabase.enabled }}
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "wikiguard.selector" "postgres" | nindent 14 }}
+      ports:
+        - { protocol: TCP, port: 5432 }
+    {{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-redpanda-clients
+  labels:
+    {{- include "wikiguard.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      wikiguard.dev/redpanda: "true"
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "wikiguard.selector" "redpanda" | nindent 14 }}
+      ports:
+        - { protocol: TCP, port: 9092 }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: redpanda
+  labels:
+    {{- include "wikiguard.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "wikiguard.selector" "redpanda" | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    # Only the ingestor, scorer, archiver, and labeler: section 8's "only they reach Redpanda".
+    - from:
+        - podSelector:
+            matchLabels:
+              wikiguard.dev/redpanda: "true"
+      ports:
+        - { protocol: TCP, port: 9092 }
+    # Its own metrics and readiness, for Prometheus.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.network.monitoringNamespace }}
+      ports:
+        - { protocol: TCP, port: 9644 }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-kube-api
+  labels:
+    {{- include "wikiguard.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      wikiguard.dev/kubeApi: "true"
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock:
+            cidr: {{ .Values.network.kubeApi.cidr }}
+      ports:
+        {{- range .Values.network.kubeApi.ports }}
+        - { protocol: TCP, port: {{ . }} }
+        {{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-scrape
+  labels:
+    {{- include "wikiguard.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      wikiguard.dev/scraped: "true"
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.network.monitoringNamespace }}
+      ports:
+        - { protocol: TCP, port: 8000 }
+{{- if .Values.devDatabase.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres
+  labels:
+    {{- include "wikiguard.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "wikiguard.selector" "postgres" | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              wikiguard.dev/database: "true"
+      ports:
+        - { protocol: TCP, port: 5432 }
+    # Grafana's read-only data source (DEC-085). In production it reads Supabase instead.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.network.monitoringNamespace }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: grafana
+      ports:
+        - { protocol: TCP, port: 5432 }
+{{- end }}
+{{- end }}

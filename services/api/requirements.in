@@ -9,3 +9,5 @@ psycopg[binary]==3.3.8
 pydantic-settings==2.16.2
 tokenizers==0.23.3
 uvicorn==0.54.0
+# Error tracking, off unless SENTRY_DSN is set (wikiguard_core.errors).
+sentry-sdk==2.75.0

@@ -19,6 +19,8 @@ LOGINS = {
     "labeler_login": "wikiguard_labeler",
     "trainer_login": "wikiguard_trainer",
     "maintenance_login": "wikiguard_maintenance",
+    "backup_login": "wikiguard_backup",
+    "observer_login": "wikiguard_observer",
 }
 
 

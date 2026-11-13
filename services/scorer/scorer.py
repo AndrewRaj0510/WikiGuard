@@ -37,6 +37,7 @@ from wikiguard_core.chain import (
     shadow_from_settings,
 )
 from wikiguard_core.config import (
+    AlertSettings,
     CommonSettings,
     ConfigError,
     DatabaseSettings,
@@ -46,6 +47,7 @@ from wikiguard_core.config import (
     WorkerSettings,
     load_settings,
 )
+from wikiguard_core.errors import init_error_tracking
 from wikiguard_core.features import build_features
 from wikiguard_core.identity import RedactingFilter
 from wikiguard_core.kafka import (
@@ -139,6 +141,7 @@ class Settings(
     ServingSettings,
     ScorerSettings,
     WorkerSettings,
+    AlertSettings,
 ):
     pass
 
@@ -601,6 +604,7 @@ def main() -> int:
     except ConfigError as error:
         logger.error("%s", error)
         return 2
+    init_error_tracking(settings.sentry_dsn, "scorer", settings.environment)
 
     ensure_topics(settings.kafka_bootstrap_servers)
     chain = chain_from_settings(settings)

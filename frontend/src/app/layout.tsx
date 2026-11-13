@@ -28,7 +28,7 @@ const newsreader = Newsreader({
 export const metadata: Metadata = {
   title: { default: "WikiGuard", template: "%s · WikiGuard" },
   description:
-    "Live vandalism triage for English Wikipedia: every edit scored by a neural model, the riskiest first, and a person always decides.",
+    "Vandalism triage for English Wikipedia: edits scored by a neural model, the riskiest first, and a person always decides.",
   applicationName: "WikiGuard",
 };
 

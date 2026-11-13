@@ -292,6 +292,18 @@ def test_large_jump_between_events_is_reported(tmp_path: Path) -> None:
     assert gap == 1000
 
 
+def test_one_event_stamped_long_ago_isnt_a_jump(tmp_path: Path) -> None:
+    """The live stream carried one event stamped 12.9 years back, which then read as a gap."""
+    ingestor, _, _ = make(tmp_path)
+    event = in_scope_events()[0]
+
+    ingestor.handle("1", {**event, "timestamp": 1_800_000_000})
+    ingestor.handle("2", {**event, "timestamp": 1_390_000_000})
+    ingestor.handle("3", {**event, "timestamp": 1_800_000_005})
+
+    assert ingestor.metrics.registry.get_sample_value("ingestor_last_gap_seconds") == 0
+
+
 def test_reconnects_with_the_last_position_after_failures(tmp_path: Path) -> None:
     ingestor, _, publisher = make(tmp_path)
     rows = [r for r in stream_rows() if r["category"] == "in_scope_registered"][:2]

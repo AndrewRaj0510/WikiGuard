@@ -49,8 +49,8 @@ test("payloads in the queue and feed show as text", async ({ page, problems }) =
     await expect(page.getByRole("link", { name: payload, exact: true })).toBeVisible();
   }
   await expectInert(page);
-  await page.getByRole("link", { name: "Live feed" }).first().click();
-  await expect(page.getByRole("list", { name: /Live feed/ }).getByRole("listitem")).toHaveCount(PAYLOADS.length);
+  await page.getByRole("link", { name: "Edit feed" }).first().click();
+  await expect(page.getByRole("list", { name: /Edit feed/ }).getByRole("listitem")).toHaveCount(PAYLOADS.length);
   await expectInert(page);
 });
 

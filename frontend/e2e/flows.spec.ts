@@ -17,8 +17,8 @@ test.describe("feed and queue", () => {
   test("the live feed shows a new edit when it arrives", async ({ page, api, problems }) => {
     void problems;
     await signInAsGuest(page);
-    await page.getByRole("link", { name: "Live feed" }).first().click();
-    const feed = page.getByRole("list", { name: /Live feed/ });
+    await page.getByRole("link", { name: "Edit feed" }).first().click();
+    const feed = page.getByRole("list", { name: /Edit feed/ });
     await expect(feed.getByRole("listitem")).toHaveCount(4);
     api.arrive({
       rev_id: 200,
@@ -32,6 +32,30 @@ test.describe("feed and queue", () => {
     });
     // The feed polls every 3 s.
     await expect(feed.getByRole("listitem").first()).toContainText("Fresh arrival", { timeout: 8000 });
+  });
+});
+
+test.describe("the demo's snapshot data (DEC-091)", () => {
+  test.use({ apiOptions: { dataMode: "snapshot" } });
+
+  test("every console page says the data is a snapshot, never live", async ({ page, problems }) => {
+    void problems;
+    await signInAsGuest(page);
+    const notice = page.getByRole("status").filter({ hasText: "Demo data:" });
+    await expect(notice).toContainText("from 26 Oct 2026 to 2 Nov 2026");
+    await expect(notice).toContainText("Not live.");
+    await expect(page.getByText("Snapshot, not live")).toBeVisible();
+    await expect(page.getByText("Live", { exact: true })).toHaveCount(0);
+
+    await page.getByRole("link", { name: "Edit feed" }).first().click();
+    await expect(page.getByRole("list", { name: /Edit feed/ }).getByRole("listitem")).toHaveCount(4);
+    await expect(notice).toBeVisible();
+    await expect(page.getByText("Snapshot, not live")).toBeVisible();
+
+    // Scored once, long ago: the Health page must not call that a stopped scorer.
+    await page.getByRole("link", { name: "Health" }).first().click();
+    await expect(page.getByText("Edits scored in the dataset")).toBeVisible();
+    await expect(page.getByText("Stale", { exact: false })).toHaveCount(0);
   });
 });
 
@@ -94,11 +118,11 @@ test.describe("when the API is down", () => {
   test("keeps showing the last data and says it's reconnecting", async ({ page, api, problems }) => {
     void problems;
     await signInAsGuest(page);
-    await page.getByRole("link", { name: "Live feed" }).first().click();
-    await expect(page.getByRole("list", { name: /Live feed/ }).getByRole("listitem")).toHaveCount(4);
+    await page.getByRole("link", { name: "Edit feed" }).first().click();
+    await expect(page.getByRole("list", { name: /Edit feed/ }).getByRole("listitem")).toHaveCount(4);
     api.down = true;
     await expect(page.getByText("Reconnecting")).toBeVisible({ timeout: 8000 });
-    await expect(page.getByRole("list", { name: /Live feed/ }).getByRole("listitem")).toHaveCount(4);
+    await expect(page.getByRole("list", { name: /Edit feed/ }).getByRole("listitem")).toHaveCount(4);
   });
 });
 

@@ -158,3 +158,17 @@ def test_log_filter_removes_identifiers(caplog: pytest.LogCaptureFixture) -> Non
     assert caplog.text
     assert TEMP not in caplog.text
     assert IP not in caplog.text
+
+
+def test_http_client_urls_never_reach_the_logs(caplog: pytest.LogCaptureFixture) -> None:
+    """httpx logs whole URLs, and a Discord webhook's URL is its secret (F-143)."""
+    handler = logging.StreamHandler()
+    handler.addFilter(RedactingFilter())
+    webhook = "https://discord.com/api/webhooks/123/not-a-real-token"
+    for name in ("httpx", "httpcore.connection"):
+        record = logging.LogRecord(name, logging.INFO, __file__, 1, "POST %s", (webhook,), None)
+        assert handler.filter(record) is False
+    warning = logging.LogRecord("httpx", logging.WARNING, __file__, 1, "retrying", None, None)
+    assert handler.filter(warning)
+    ours = logging.LogRecord("scorer", logging.INFO, __file__, 1, "scored %s", (12,), None)
+    assert handler.filter(ours)

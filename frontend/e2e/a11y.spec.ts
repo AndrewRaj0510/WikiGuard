@@ -37,7 +37,7 @@ for (const scheme of ["light", "dark"] as const) {
       await signInAsGuest(page);
       await audit(page, "queue");
       await page.goto("/feed");
-      await expect(page.getByRole("list", { name: /Live feed/ })).toBeVisible();
+      await expect(page.getByRole("list", { name: /Edit feed/ })).toBeVisible();
       await audit(page, "feed");
       await page.goto("/edits/101");
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();

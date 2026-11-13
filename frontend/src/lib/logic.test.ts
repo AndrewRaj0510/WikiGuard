@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { HealthSummary, ModelEntry } from "./api/types";
-import { comparisonOf, healthSignals, retrainRunsOf, runStatus } from "./health";
+import { comparisonOf, healthSignals, retrainRunsOf, runStatus, snapshotNotice } from "./health";
 import { neighbour } from "./list-order";
 import { aliasLabel, chainRank, statsOf } from "./models";
 import { contentSecurityPolicy, INDEXABLE_PATHS, newNonce } from "./security/headers";
@@ -45,6 +45,9 @@ describe("the content security policy", () => {
 function summary(overrides: Partial<HealthSummary> = {}): HealthSummary {
   return {
     stale: false,
+    data_mode: "live",
+    data_from: null,
+    data_to: null,
     scored_last_24h: 1000,
     fallback_rate_24h: 0.01,
     load_shed_rate_24h: 0,
@@ -96,6 +99,30 @@ describe("health signals", () => {
 
   it("says when the numbers come from the API's cache", () => {
     expect(healthSignals(summary({ stale: true }), NOW)[0].title).toBe("Showing cached data");
+  });
+  it("never calls a snapshot's old scores stale: it was scored once, on purpose", () => {
+    const later = NOW + 30 * 24 * 3600_000;
+    expect(healthSignals(summary({ data_mode: "snapshot" }), later)).toEqual([]);
+  });
+});
+
+describe("the snapshot notice (DEC-091)", () => {
+  it("says what the data is, its dates, and that it isn't live", () => {
+    const notice = snapshotNotice(
+      summary({
+        data_mode: "snapshot",
+        scored_last_24h: 25294,
+        data_from: "2026-10-26T20:52:42Z",
+        data_to: "2026-11-02T19:54:48Z",
+      }),
+    );
+    expect(notice).toBe(
+      "25,294 real English Wikipedia edits from 26 Oct 2026 to 2 Nov 2026, scored once by the champion model, with their real revert labels. Not live.",
+    );
+  });
+
+  it("is absent on live data", () => {
+    expect(snapshotNotice(summary())).toBeNull();
   });
 });
 

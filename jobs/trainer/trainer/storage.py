@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from wikiguard_core.alerts import Alerter
-from wikiguard_core.archive import delete_reference, reference_versions
+from wikiguard_core.archive import Root, delete_reference, open_archive, reference_versions
 from wikiguard_core.dvcops import DvcError, DvcRepo
 from wikiguard_core.snapshot import read_manifest
 
@@ -89,7 +89,7 @@ def storage_bytes(registry: Registry, snapshots: Path) -> dict[str, int]:
 def retain(
     registry: Registry,
     repo: DvcRepo,
-    archive_root: Path,
+    archive_root: Root,
     gc_enabled: bool,
     alert_bytes: int,
     alerter: Alerter,
@@ -147,7 +147,7 @@ def retention_after_retrain(
     result = retain(
         registry,
         DvcRepo(Path(settings.snapshot_repo_path)),
-        Path(settings.archive_path),
+        open_archive(settings),
         settings.snapshot_gc_enabled,
         settings.storage_alert_bytes,
         alerter,
@@ -171,7 +171,7 @@ def main() -> int:
     result = retain(
         registry_from_settings(settings),
         DvcRepo(Path(settings.snapshot_repo_path)),
-        Path(settings.archive_path),
+        open_archive(settings),
         settings.snapshot_gc_enabled,
         settings.storage_alert_bytes,
         alerter,

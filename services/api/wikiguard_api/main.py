@@ -9,6 +9,7 @@ import sys
 from fastapi import FastAPI
 from wikiguard_core.chain import chain_from_settings
 from wikiguard_core.config import ConfigError, LlmSettings, load_settings
+from wikiguard_core.errors import init_error_tracking
 from wikiguard_core.identity import RedactingFilter
 
 from wikiguard_api.app import create_app
@@ -30,6 +31,9 @@ def build() -> FastAPI:
     try:
         settings = load_settings(Settings)
         configure_logging(settings.log_level)
+        init_error_tracking(
+            settings.sentry_dsn, "api", settings.environment, settings.git_commit or None
+        )
         providers: list[Provider] = []
         cap = 0
         if settings.explain_enabled:

@@ -33,6 +33,8 @@ EXPRESSION = re.compile(r"\$\{\{\s*([^}]+?)\s*\}\}")
 ALLOWED_WRITES = {
     ("cd.yml", "build"): {"packages"},
     ("cd.yml", "publish"): {"packages"},
+    # Opens the pull request that pins the cluster's image digests (DEC-084).
+    ("cd.yml", "cluster-images"): {"contents", "pull-requests"},
     ("codeql.yml", "analyze"): {"security-events"},
     ("release.yml", "release"): {"contents", "packages"},
 }
@@ -252,3 +254,14 @@ def test_dependabot_watches_every_place_a_dependency_is_pinned() -> None:
     assert {folder_of(path.parent) for path in DOCKERFILES} <= watched["docker"]
     assert {folder_of(source.parent) for source in inputs()} <= watched["pip"]
     assert {folder_of(path.parent) for path in ACTIONS} <= watched["github-actions"]
+
+
+def test_the_trainers_two_locks_ask_for_the_same_packages() -> None:
+    """One lock per CPU type, because PyTorch's CPU wheel differs (jobs/trainer/Dockerfile)."""
+    folder = ROOT / "jobs/trainer"
+
+    def asked(arch: str) -> list[str]:
+        lines = (folder / f"requirements-job-{arch}.in").read_text("utf-8").splitlines()
+        return [line for line in lines if line and not line.startswith("#")]
+
+    assert asked("amd64") == asked("arm64")

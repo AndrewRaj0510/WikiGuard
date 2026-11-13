@@ -40,6 +40,8 @@ ROLES = {
     "wikiguard_labeler",
     "wikiguard_trainer",
     "wikiguard_maintenance",
+    "wikiguard_backup",
+    "wikiguard_observer",
 }
 
 
@@ -152,6 +154,17 @@ def add_edit(connection: psycopg.Connection, rev_id: int = 1) -> None:
         ),
         ("wikiguard_trainer", "UPDATE reviews SET decision = 'ok'"),
         ("wikiguard_scorer", "UPDATE shadow_scores SET score = 0"),
+        # The backup reads what can't be rebuilt, and nothing else, and writes nothing (0005).
+        ("wikiguard_backup", "SELECT * FROM edits"),
+        ("wikiguard_backup", "SELECT * FROM sessions"),
+        ("wikiguard_backup", "SELECT * FROM explanations"),
+        ("wikiguard_backup", "INSERT INTO reviews (rev_id, decision) VALUES (1, 'skip')"),
+        ("wikiguard_backup", "DELETE FROM model_versions"),
+        # Grafana reads the audit log and counters, never diff text or sessions (0005).
+        ("wikiguard_observer", "SELECT * FROM edits"),
+        ("wikiguard_observer", "SELECT * FROM sessions"),
+        ("wikiguard_observer", "SELECT * FROM reviews"),
+        ("wikiguard_observer", "INSERT INTO audit_log (actor, action) VALUES ('x', 'y')"),
     ],
 )
 def test_roles_are_refused_outside_their_job(database: Config, role: str, statement: str) -> None:
@@ -182,6 +195,12 @@ def test_roles_are_refused_outside_their_job(database: Config, role: str, statem
             "INSERT INTO retrain_requests (kind, reason, requested_by) "
             "VALUES ('retrain', 'drift', 'monitor')",
         ),
+        ("wikiguard_backup", "SELECT * FROM reviews"),
+        ("wikiguard_backup", "SELECT * FROM audit_log"),
+        ("wikiguard_backup", "SELECT * FROM model_versions"),
+        ("wikiguard_observer", "SELECT * FROM audit_log"),
+        ("wikiguard_observer", "SELECT * FROM llm_usage"),
+        ("wikiguard_observer", "SELECT pg_database_size(current_database())"),
     ],
 )
 def test_roles_can_do_their_job_through_rls(database: Config, role: str, statement: str) -> None:

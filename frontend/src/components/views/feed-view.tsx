@@ -39,12 +39,13 @@ export function FeedView() {
     { intervalMs: FEED_POLL_MS },
   );
   const items = feed.data?.page.items ?? [];
+  const snapshot = feed.data?.page.data_mode === "snapshot";
   const order = items.map((item) => item.rev_id).join(",");
   useEffect(() => {
     setListOrder({
       ids: order ? order.split(",").map(Number) : [],
       href: "/feed",
-      label: "Live feed",
+      label: "Edit feed",
     });
   }, [order]);
 
@@ -52,14 +53,19 @@ export function FeedView() {
     <div className="mx-auto max-w-6xl px-4 py-8">
       <PageHeader
         eyebrow="Stream"
-        title="Live feed"
-        lede="English Wikipedia article edits as they arrive, newest first, each scored by the champion model or a fallback. Bots are left out."
+        title="Edit feed"
+        lede={
+          snapshot
+            ? "Real English Wikipedia article edits from the demo’s dataset, newest first, each scored by the champion model. Bots are left out."
+            : "English Wikipedia article edits as they arrive, newest first, each scored by the champion model or a fallback. Bots are left out."
+        }
         aside={
           <LiveStatus
             paused={feed.paused}
             error={feed.error}
             updatedAt={feed.updatedAt}
             serverStale={feed.data?.page.stale}
+            snapshot={snapshot}
           />
         }
       />
@@ -71,14 +77,16 @@ export function FeedView() {
         )}
         {feed.status === "ready" &&
           (items.length === 0 ? (
-            <EmptyState title="Waiting for edits">
-              Nothing has arrived in the last three days. The ingestor may be stopped.
+            <EmptyState title={snapshot ? "No edits loaded" : "Waiting for edits"}>
+              {snapshot
+                ? "The demo’s dataset hasn’t been loaded yet."
+                : "Nothing has arrived in the last three days. The ingestor may be stopped."}
             </EmptyState>
           ) : (
             <EditList
               items={items}
               arrived={feed.data?.arrived}
-              label="Live feed, newest first"
+              label="Edit feed, newest first"
               keyboard
             />
           ))}

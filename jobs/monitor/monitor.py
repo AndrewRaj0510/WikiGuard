@@ -26,7 +26,16 @@ import psycopg
 import pyarrow.compute as pc
 from psycopg.types.json import Jsonb
 from wikiguard_core.alerts import Alerter, ping
-from wikiguard_core.archive import EDITS, LABELS, SCORES, read_reference, read_table, sample_mask
+from wikiguard_core.archive import (
+    EDITS,
+    LABELS,
+    SCORES,
+    Root,
+    open_archive,
+    read_reference,
+    read_table,
+    sample_mask,
+)
 from wikiguard_core.config import (
     AlertSettings,
     ArchiveSettings,
@@ -102,7 +111,7 @@ class Report:
 # --- Reading ---
 
 
-def observed_from_archive(root: Path, now: datetime) -> Observed:
+def observed_from_archive(root: Root, now: datetime) -> Observed:
     """Every edit with a final label, its newest served score, and the columns for slices."""
     since = (now - timedelta(days=READ_DAYS)).date()
     labels = read_table(root, LABELS, since=since, columns=["label", "excluded_reason"])
@@ -163,7 +172,7 @@ def observed_from_archive(root: Path, now: datetime) -> Observed:
     )
 
 
-def current_sample(root: Path, now: datetime, rows: int = DRIFT_ROWS) -> list[dict[str, Any]]:
+def current_sample(root: Root, now: datetime, rows: int = DRIFT_ROWS) -> list[dict[str, Any]]:
     """Features of a sample of the last 7 days' edits. Labels aren't needed for drift."""
     since = (now - WINDOW).date()
     count = read_table(root, EDITS, since=since, until=now.date(), columns=[]).num_rows
@@ -312,7 +321,7 @@ class Monitor:
     connection: psycopg.Connection[Any]
     alerter: Alerter
     drift: DriftFn
-    archive_root: Path
+    archive_root: Root
 
     def run(self, now: datetime) -> Report:
         report = Report(now)
@@ -546,7 +555,7 @@ def main() -> int:
             settings.database_url.get_secret_value(), prepare_threshold=None, connect_timeout=10
         ) as connection:
             report = Monitor(
-                settings, connection, alerter, evidently_drift, Path(settings.archive_path)
+                settings, connection, alerter, evidently_drift, open_archive(settings)
             ).run(now)
     except Exception as error:
         # Section 5: a monitor that fails must say so, not quietly skip a day.

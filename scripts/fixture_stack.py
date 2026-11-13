@@ -5,7 +5,7 @@ fixtures in place of the live stream, and throwaway secrets, so it reads no .env
 the API as one of its checks and deletes its secrets; this one keeps both, so the API stays up.
 
     python scripts/fixture_stack.py          # start, wait until ready, print the edit count
-    python scripts/fixture_stack.py --down   # stop it and delete its volumes
+    python scripts/fixture_stack.py --down   # stop it, delete its volumes, images, and build cache
 
 The API is at http://127.0.0.1:8765, with Explain switched off. Throwaway values, including the
 `user` password, go to data/fixture_stack/ (git-ignored), and nowhere else.
@@ -35,7 +35,7 @@ def main() -> int:
 
     if args.down:
         if env_file.exists():
-            e2e.Stack(env_file).clean()
+            e2e.Stack(env_file).clean(remove_images=True)
         print("Stopped")  # noqa: T201
         return 0
 

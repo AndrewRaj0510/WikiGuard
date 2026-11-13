@@ -20,6 +20,7 @@ import httpx
 from prometheus_client import CollectorRegistry, Counter, Gauge
 from pydantic import ValidationError
 from wikiguard_core.config import (
+    AlertSettings,
     CommonSettings,
     ConfigError,
     KafkaSettings,
@@ -28,6 +29,7 @@ from wikiguard_core.config import (
     WorkerSettings,
     load_settings,
 )
+from wikiguard_core.errors import init_error_tracking
 from wikiguard_core.identity import RedactingFilter, hash_user, redact_identifiers
 from wikiguard_core.ingest import REASON_API_ERROR, REASON_MALFORMED, attach_diff
 from wikiguard_core.kafka import (
@@ -53,7 +55,14 @@ GAP_WARNING_SECONDS = 120.0
 RESET_BACKOFF_AFTER_SECONDS = 60.0
 
 
-class Settings(CommonSettings, KafkaSettings, WikimediaSettings, PrivacySettings, WorkerSettings):
+class Settings(
+    CommonSettings,
+    KafkaSettings,
+    WikimediaSettings,
+    PrivacySettings,
+    WorkerSettings,
+    AlertSettings,
+):
     pass
 
 
@@ -205,13 +214,15 @@ class Ingestor:
         moment = event.get("timestamp")
         if not isinstance(moment, int | float):
             return
+        # Measured from the newest time seen, not the last event's: the stream sometimes carries
+        # an event stamped years back, and the next ordinary one would look like a jump of years.
         if self.last_event_time is not None:
             jump = moment - self.last_event_time
             if jump > GAP_WARNING_SECONDS:
                 self.metrics.gap.set(jump)
                 logger.warning("Stream jumped %d seconds; consider gap repair", jump)
-        self.last_event_time = moment
-        self.metrics.lag.set(max(0.0, time.time() - moment))
+        self.last_event_time = max(moment, self.last_event_time or moment)
+        self.metrics.lag.set(max(0.0, time.time() - self.last_event_time))
 
     def build_edit(self, event: dict[str, Any]) -> EditEvent | None:
         """A full edit, or None after sending the reason to the dead-letter topic."""
@@ -307,6 +318,7 @@ def main() -> int:
     except ConfigError as error:
         logger.error("%s", error)
         return 2
+    init_error_tracking(settings.sentry_dsn, "ingestor", settings.environment)
 
     ensure_topics(settings.kafka_bootstrap_servers)
     client = WikimediaClient(settings.wikimedia_user_agent, settings.mediawiki_api_url)

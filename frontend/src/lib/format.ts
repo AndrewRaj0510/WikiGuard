@@ -33,6 +33,14 @@ export function absoluteTime(iso: string): string {
   return Number.isFinite(then) ? `${ABSOLUTE.format(then)} UTC` : "";
 }
 
+const DAY = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeZone: "UTC" });
+
+/** "26 Oct 2026", in UTC like every other time in the app. */
+export function formatDay(iso: string): string {
+  const then = Date.parse(iso);
+  return Number.isFinite(then) ? DAY.format(then) : "";
+}
+
 export function formatCountdown(seconds: number): string {
   const safe = Math.max(0, Math.floor(seconds));
   const minutes = Math.floor(safe / 60);

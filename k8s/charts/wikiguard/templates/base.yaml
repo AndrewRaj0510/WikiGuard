@@ -1,0 +1,114 @@
+{{- /*
+Settings, priorities, identities, and storage: everything the components below share.
+*/ -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wikiguard-config
+  labels:
+    {{- include "wikiguard.labels" . | nindent 4 }}
+data:
+  {{- range $key, $value := .Values.config }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: wikiguard-critical
+  labels:
+    {{- include "wikiguard.labels" . | nindent 4 }}
+value: {{ .Values.priorityClasses.critical }}
+globalDefault: false
+description: The stream - Redpanda, ingestor, scorer, archiver. Never waits behind batch work.
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: wikiguard-batch
+  labels:
+    {{- include "wikiguard.labels" . | nindent 4 }}
+value: {{ .Values.priorityClasses.batch }}
+globalDefault: false
+description: Scheduled jobs - labeler, monitor, purge, retention, backup, poller.
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: wikiguard-training
+  labels:
+    {{- include "wikiguard.labels" . | nindent 4 }}
+value: {{ .Values.priorityClasses.training }}
+globalDefault: false
+# Training waits for room. It never evicts anything to make room.
+preemptionPolicy: Never
+description: The trainer Job. Lowest, and can't preempt the scorer (section 3 of the plan).
+{{- /*
+One service account per component, with no API token mounted. Only the poller gets a token, and
+its Role below lets it manage trainer Jobs in this namespace and nothing else.
+*/}}
+{{- $names := list "redpanda" "trainer" }}
+{{- range $name, $worker := .Values.workers }}{{ if $worker.enabled }}{{ $names = append $names $name }}{{ end }}{{ end }}
+{{- range $name, $job := .Values.cronJobs }}{{ $names = append $names $name }}{{ end }}
+{{- if .Values.devDatabase.enabled }}{{ $names = append $names "postgres" }}{{ $names = append $names "migrate" }}{{ end }}
+{{- range $name := $names }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: wikiguard-{{ $name }}
+  labels:
+    {{- include "wikiguard.labels" $ | nindent 4 }}
+automountServiceAccountToken: {{ and (hasKey $.Values.cronJobs $name) (index $.Values.cronJobs $name).kubeApi | default false }}
+{{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: wikiguard-trainer-launcher
+  labels:
+    {{- include "wikiguard.labels" . | nindent 4 }}
+rules:
+  # Create a trainer Job, watch it, and delete it at the time limit. Not pods, secrets, or anything
+  # else: Kubernetes itself starts the Job's pod, with the trainer's own service account.
+  - apiGroups: [batch]
+    resources: [jobs]
+    verbs: [create, get, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: wikiguard-trainer-launcher
+  labels:
+    {{- include "wikiguard.labels" . | nindent 4 }}
+subjects:
+  - kind: ServiceAccount
+    name: wikiguard-retrain-poller
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: wikiguard-trainer-launcher
+{{- $claims := dict "archive" .Values.storage.archive "ingestor-state" .Values.storage.ingestorState "models" .Values.storage.models "trainer-cache" .Values.storage.trainerCache }}
+{{- /* Only where there's no bucket for backups to go to: kind. */}}
+{{- if .Values.storage.backups }}{{ $_ := set $claims "backups" .Values.storage.backups }}{{ end }}
+{{- range $name, $size := $claims }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: wikiguard-{{ $name }}
+  labels:
+    {{- include "wikiguard.labels" $ | nindent 4 }}
+  annotations:
+    # Data outlives a chart change. Deleting it is a deliberate step, never a side effect.
+    helm.sh/resource-policy: keep
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- if $.Values.storage.className }}
+  storageClassName: {{ $.Values.storage.className }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ $size }}
+{{- end }}

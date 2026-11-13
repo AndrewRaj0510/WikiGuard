@@ -1,0 +1,8 @@
+apiVersion: v2
+name: wikiguard
+description: WikiGuard's cluster half - ingest, score, archive, label, monitor, retrain, back up
+type: application
+# The chart's own version. The images it runs are pinned in images.yaml, which CD updates.
+version: 0.7.0
+appVersion: "0.7.0"
+home: https://github.com/AndrewRaj0510/WikiGuard

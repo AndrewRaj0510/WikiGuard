@@ -1,0 +1,7 @@
+# One node, like the VM. kind's own network plugin (kindnet) enforces NetworkPolicies, so the
+# default-deny rules are tested here before they reach k3s.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: wikiguard
+nodes:
+  - role: control-plane

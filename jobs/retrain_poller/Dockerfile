@@ -24,7 +24,7 @@ ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PATH=/venv/bin:$PATH
 WORKDIR /app
 
 COPY --from=build /venv /venv
-COPY jobs/retrain_poller/poller.py .
+COPY jobs/retrain_poller/poller.py jobs/retrain_poller/kube.py ./
 
 USER 10001
 CMD ["python", "poller.py"]

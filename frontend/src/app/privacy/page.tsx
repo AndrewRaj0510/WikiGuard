@@ -44,13 +44,15 @@ export default function PrivacyPage() {
             app never shows either.
           </li>
           <li>
-            Edits are kept in the database for three days, and in a compressed archive for 30. Past
-            that, only aggregate numbers remain, along with the dataset snapshots behind the
-            current models.
+            The public demo holds a fixed set of edits from 26 October to 2 November 2026, taken
+            from the public dataset snapshot behind the current models, for as long as the demo
+            runs. The live pipeline, which runs only on the owner’s machine, keeps edits for three
+            days, and in a compressed archive for 30; past that, only aggregate numbers remain.
           </li>
           <li>
             When Wikipedia hides a revision, usually because it held personal information,
-            WikiGuard deletes its copy of the text and any explanation of it.
+            WikiGuard deletes its copy of the text and any explanation of it the next time its
+            purge job runs. For the demo, the owner runs it by hand.
           </li>
         </Section>
 

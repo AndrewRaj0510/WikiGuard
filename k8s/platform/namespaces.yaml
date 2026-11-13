@@ -1,0 +1,40 @@
+# The namespaces, each with the strictest Pod Security level its pods can meet. Applied by the
+# bootstrap script before anything else, so no pod ever starts in a namespace without its level.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: wikiguard
+  labels:
+    # Every WikiGuard pod: non-root, no privilege escalation, all capabilities dropped, seccomp.
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/audit: restricted
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+  labels:
+    # node-exporter reads the host's own numbers, which needs the host's network and /proc.
+    # That one pod is why this namespace can't be restricted. Everything else in it could be.
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/warn: baseline
+    pod-security.kubernetes.io/audit: restricted
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: argocd
+  labels:
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/audit: restricted
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: sealed-secrets
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/warn: restricted

@@ -1,0 +1,24 @@
+# The Cloudflare Worker that is WikiGuard's one public address (D5). The owner deploys it from this
+# folder with `npx wrangler deploy`, after `npx wrangler secret put EDGE_SHARED_SECRET` (the same
+# value as the API's EDGE_SHARED_SECRET on Render). Free plan only: past 100,000 requests a day,
+# requests fail with error 1027, and nothing is billed (DEC-001).
+name = "wikiguard"
+main = "worker.js"
+compatibility_date = "2026-11-01"
+workers_dev = true
+# No custom domain: the free workers.dev address, so no domain is ever bought.
+routes = []
+
+[vars]
+# The Render service's own address and the Vercel project's. Neither is a secret.
+API_ORIGIN = "https://wikiguard-api.onrender.com"
+FRONTEND_ORIGIN = "https://wiki-guard.vercel.app"
+
+# Per-visitor limit at the edge, before a request can wake Render: 60 API requests a minute,
+# which is above what one browser tab polling every 3 seconds uses (DEC-060).
+[[ratelimits]]
+name = "API_LIMITER"
+namespace_id = "1001"
+  [ratelimits.simple]
+  limit = 60
+  period = 60

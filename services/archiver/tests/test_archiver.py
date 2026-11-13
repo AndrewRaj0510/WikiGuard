@@ -251,3 +251,69 @@ def test_size_counts_parquet_files(tmp_path: Path) -> None:
     write_rows(tmp_path, EDITS, [edit(1).model_dump()])
 
     assert size_in_bytes(tmp_path) > 0
+
+
+# --- The daily CronJob's modes: cleanup, mirror, and the rebuild's restore (DEC-083) ---
+
+
+def maintenance_settings(tmp_path: Path, bucket: bool) -> Any:
+    from archiver import Settings
+
+    values: dict[str, Any] = {"archive_path": str(tmp_path / "archive"), "_env_file": None}
+    if bucket:
+        values |= {
+            "archive_s3_bucket": "wikiguard",
+            "archive_s3_endpoint": "http://127.0.0.1:9",
+            "archive_s3_region": "eu-frankfurt-1",
+            "archive_s3_access_key": "a",
+            "archive_s3_secret_key": "b",
+        }
+    return Settings(**values)
+
+
+def test_cleanup_alone_needs_no_bucket(tmp_path: Path) -> None:
+    from archiver import maintain
+    from wikiguard_core.archive import open_archive
+
+    settings = maintenance_settings(tmp_path, bucket=False)
+    root = open_archive(settings)
+    write_rows(root, EDITS, [edit(1, DAY - timedelta(days=40)).model_dump()])
+    assert maintain(settings, root, cleanup=True, copy=False, restore=False) == 0
+    assert read_rows(root, EDITS) == []
+
+
+def test_mirroring_without_a_bucket_is_refused(tmp_path: Path) -> None:
+    from archiver import maintain
+    from wikiguard_core.archive import open_archive
+
+    settings = maintenance_settings(tmp_path, bucket=False)
+    assert maintain(settings, open_archive(settings), False, copy=True, restore=False) == 2
+
+
+def test_mirror_then_restore_through_the_bucket(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import archiver
+    import pyarrow.fs as pafs
+    from wikiguard_core.archive import Archive, open_archive
+
+    bucket = Archive(pafs._MockFileSystem(), "wikiguard/archive", local=False)
+    monkeypatch.setattr(archiver, "open_bucket", lambda settings, prefix: bucket)
+    settings = maintenance_settings(tmp_path, bucket=True)
+    root = open_archive(settings)
+    write_rows(root, EDITS, [edit(1).model_dump(), edit(2).model_dump()])
+
+    assert archiver.maintain(settings, root, cleanup=True, copy=True, restore=False) == 0
+    assert sorted(row["rev_id"] for row in read_rows(bucket, EDITS)) == [1, 2]
+
+    rebuilt = Archive.at(tmp_path / "rebuilt")
+    assert archiver.maintain(settings, rebuilt, False, copy=False, restore=True) == 0
+    assert sorted(row["rev_id"] for row in read_rows(rebuilt, EDITS)) == [1, 2]
+
+
+def test_the_archive_size_is_measured_now_and_then(tmp_path: Path) -> None:
+    archiver = Archiver(FakeConsumer([]), tmp_path, clock=Clock())
+    write_rows(tmp_path, EDITS, [edit(1).model_dump()])
+    archiver.poll_once()
+    measured = archiver.registry.get_sample_value("archiver_archive_bytes")
+    assert measured is not None and measured > 0

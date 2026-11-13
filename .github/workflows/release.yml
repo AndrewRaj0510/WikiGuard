@@ -57,7 +57,7 @@ jobs:
         run: |
           prefix="${REGISTRY}/${GITHUB_REPOSITORY_OWNER,,}/wikiguard"
           for name in api ingestor scorer archiver labeler migrate monitor purge \
-            purge-snapshots retention retrain-poller; do
+            purge-snapshots retention retrain-poller trainer backup; do
             # Fails if CD never published this commit, so an untested commit can't be released.
             docker buildx imagetools create \
               --tag "${prefix}-${name}:${VERSION}" "${prefix}-${name}:sha-${GITHUB_SHA}"

@@ -1,0 +1,142 @@
+# kube-prometheus-stack 93.2.2: Prometheus, Alertmanager, Grafana, kube-state-metrics, and
+# node-exporter, sized for one small VM. All of it stays private: no Service is exposed, and the
+# owner reaches Grafana through the Tailscale tunnel or a port-forward (section 17, F-037).
+
+fullnameOverride: kps
+
+# k3s and kind run these inside one process the cluster can't scrape, so their rules would only
+# ever fire as false alarms.
+kubeEtcd: { enabled: false }
+kubeControllerManager: { enabled: false }
+kubeScheduler: { enabled: false }
+kubeProxy: { enabled: false }
+defaultRules:
+  rules:
+    etcd: false
+    kubeControllerManager: false
+    kubeSchedulerAlerting: false
+    kubeSchedulerRecording: false
+    kubeProxy: false
+
+prometheus:
+  prometheusSpec:
+    scrapeInterval: 30s
+    evaluationInterval: 30s
+    retention: 15d
+    retentionSize: 8GB
+    # Pick up the ServiceMonitors and rules the WikiGuard chart ships, whatever their labels.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    resources:
+      requests: { cpu: 200m, memory: 512Mi }
+      limits: { cpu: "1", memory: 1536Mi }
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: 10Gi
+
+alertmanager:
+  alertmanagerSpec:
+    # The Secret wikiguard-alerting (sealed, k8s/secrets) holds the two URLs as files, so they
+    # never appear in this config or in Alertmanager's status page.
+    secrets: [wikiguard-alerting]
+    resources:
+      requests: { cpu: 10m, memory: 32Mi }
+      limits: { cpu: 100m, memory: 128Mi }
+  config:
+    route:
+      receiver: discord
+      group_by: [alertname, namespace]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 12h
+      routes:
+        # The cluster's heartbeat: Watchdog always fires, so Healthchecks.io hears from the cluster
+        # every 5 minutes, and alerts by email when it stops. Prometheus inside the cluster can't
+        # report the cluster's own death (section 11).
+        - receiver: healthchecks
+          matchers: ['alertname = "Watchdog"']
+          group_wait: 0s
+          group_interval: 1m
+          repeat_interval: 5m
+        - receiver: "null"
+          matchers: ['alertname = "InfoInhibitor"']
+    inhibit_rules:
+      - source_matchers: ['severity = "critical"']
+        target_matchers: ['severity = "warning"']
+        equal: [alertname, namespace]
+    receivers:
+      - name: "null"
+      - name: discord
+        discord_configs:
+          - webhook_url_file: /etc/alertmanager/secrets/wikiguard-alerting/discord-webhook-url
+            send_resolved: true
+      - name: healthchecks
+        webhook_configs:
+          - url_file: /etc/alertmanager/secrets/wikiguard-alerting/healthchecks-url
+            send_resolved: false
+
+grafana:
+  # The admin login comes from a Secret the owner makes (k8s/README.md), never a default.
+  admin:
+    existingSecret: grafana-admin
+    userKey: admin-user
+    passwordKey: admin-password
+  persistence:
+    enabled: false
+  resources:
+    requests: { cpu: 25m, memory: 128Mi }
+    limits: { cpu: 500m, memory: 384Mi }
+  grafana.ini:
+    analytics:
+      reporting_enabled: false
+      check_for_updates: false
+    users:
+      allow_sign_up: false
+    auth.anonymous:
+      enabled: false
+  sidecar:
+    dashboards:
+      # The WikiGuard chart's dashboards live in its own namespace.
+      searchNamespace: ALL
+      folderAnnotation: grafana_folder
+      provider:
+        foldersFromFilesStructure: true
+  # Read-only Postgres for the Security, API, and Free-tier dashboards (DEC-085). The values come
+  # from the Secret grafana-observer-db as environment variables, which Grafana's provisioning reads.
+  envFromSecret: grafana-observer-db
+  additionalDataSources:
+    - name: WikiGuard Postgres
+      uid: wikiguard-postgres
+      type: grafana-postgresql-datasource
+      access: proxy
+      url: $OBSERVER_DB_HOST
+      user: $OBSERVER_DB_USER
+      jsonData:
+        database: $OBSERVER_DB_NAME
+        sslmode: $OBSERVER_DB_SSLMODE
+        postgresVersion: 1700
+        maxOpenConns: 2
+        maxIdleConns: 1
+      secureJsonData:
+        password: $OBSERVER_DB_PASSWORD
+      editable: false
+
+kube-state-metrics:
+  resources:
+    requests: { cpu: 10m, memory: 64Mi }
+    limits: { cpu: 200m, memory: 192Mi }
+
+prometheus-node-exporter:
+  resources:
+    requests: { cpu: 10m, memory: 32Mi }
+    limits: { cpu: 200m, memory: 96Mi }
+
+prometheusOperator:
+  resources:
+    requests: { cpu: 25m, memory: 64Mi }
+    limits: { cpu: 200m, memory: 256Mi }

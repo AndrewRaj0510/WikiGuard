@@ -26,11 +26,21 @@ WORKDIR /app
 COPY --from=build /venv /venv
 COPY services/api/wikiguard_api wikiguard_api
 
-# Verified models live here. Render's disk doesn't last, so Phase 7 builds its models into the image.
+# Verified models live here. Render's disk is wiped on every sleep, so its build downloads the two
+# models it serves into the image (prefetch_models.py, D3). Render passes its environment variables
+# as build arguments, so PREFETCH_MODELS=true there turns this on. CI's builds leave it off.
 ENV MODEL_CACHE_DIR=/models/cache
 # ONNX Runtime writes a small file under HOME, and this user has no home folder.
 ENV HOME=/tmp
-RUN mkdir -p /models/cache && chown -R 10001 /models
+ARG PREFETCH_MODELS=false
+ARG MLFLOW_TRACKING_URI=https://dagshub.com/AndrewRaj0510/WikiGuard.mlflow
+COPY services/api/prefetch_models.py /app/prefetch_models.py
+RUN mkdir -p /models/cache \
+    && if [ "$PREFETCH_MODELS" = "true" ]; then \
+        MODEL_CHAIN_MODE=champion_and_last MLFLOW_TRACKING_URI="$MLFLOW_TRACKING_URI" \
+        python /app/prefetch_models.py; \
+    fi \
+    && chown -R 10001 /models
 USER 10001
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"

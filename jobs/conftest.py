@@ -18,6 +18,8 @@ ROLES = (
     "wikiguard_labeler",
     "wikiguard_trainer",
     "wikiguard_maintenance",
+    "wikiguard_backup",
+    "wikiguard_observer",
 )
 TABLES = (
     "shadow_scores",

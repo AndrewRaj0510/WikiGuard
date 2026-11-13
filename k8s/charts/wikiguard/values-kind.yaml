@@ -1,0 +1,63 @@
+# kind on the laptop: what differs from production. Used by scripts/kind_cluster.py, which builds
+# the images, loads them into the node, makes throwaway secrets, and installs with these values.
+
+environment: dev
+
+image:
+  # Built on the laptop and loaded into the node, never pulled.
+  registry: kind.local
+  tag: dev
+  pullPolicy: Never
+
+config:
+  ENVIRONMENT: dev
+  WIKIMEDIA_USER_AGENT: "WikiGuard/0.7 (https://github.com/AndrewRaj0510/WikiGuard; local kind test)"
+  # No bucket on the laptop: the archive stays on its volume and the mirror is skipped, and
+  # backups go to their own volume.
+  BACKUP_PATH: /backups
+  # Overridden by the kind script for the launcher rehearsal (k8s/README.md).
+  TRAINER_COMMAND: python -m trainer.lifecycle
+
+storage:
+  className: standard
+  archive: 2Gi
+  models: 3Gi
+  trainerCache: 4Gi
+  redpanda: 2Gi
+  backups: 1Gi
+
+workers:
+  scorer:
+    resources:
+      requests: { cpu: 250m, memory: 1Gi }
+      limits: { cpu: "2", memory: 3Gi }
+
+cronJobs:
+  backup:
+    volumes: [backups]
+  # These need DagsHub's write token, which only the owner holds. They run in the VM's cluster.
+  purge-snapshots:
+    suspend: true
+  purge-snapshots-full:
+    suspend: true
+  archive-maintenance:
+    args: [--cleanup]
+
+trainer:
+  # No DagsHub key on the laptop, so the launcher rehearsal runs without the checkout.
+  checkout: false
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits: { cpu: "2", memory: 3Gi }
+
+network:
+  database:
+    external: false
+  # The script replaces this with the API server's address on the kind network.
+  kubeApi:
+    cidr: 172.16.0.0/12
+    ports: [443, 6443]
+
+devDatabase:
+  enabled: true
+  image: postgres:17.11-alpine@sha256:e5d2edd28b1f8d40a0a6c0c9cdc545b19b56a0d5d88f94bc11a97d970d4700d0

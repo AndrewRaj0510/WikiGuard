@@ -367,6 +367,11 @@ export interface components {
         };
         /** EditPage */
         EditPage: {
+            /**
+             * Data Mode
+             * @enum {string}
+             */
+            data_mode: "live" | "snapshot";
             /** Items */
             items: components["schemas"]["EditSummary"][];
             /** Next Cursor */
@@ -460,6 +465,15 @@ export interface components {
         HealthSummary: {
             /** Chain */
             chain: components["schemas"]["BreakerInfo"][];
+            /** Data From */
+            data_from: string | null;
+            /**
+             * Data Mode
+             * @enum {string}
+             */
+            data_mode: "live" | "snapshot";
+            /** Data To */
+            data_to: string | null;
             /** Drift Reports */
             drift_reports: {
                 [key: string]: unknown;

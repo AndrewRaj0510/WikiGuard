@@ -1,0 +1,21 @@
+# The one Application applied by hand (scripts/bootstrap_cluster.sh). It points Argo CD at
+# k8s/argocd/apps, and everything else in the cluster comes from there: change the repo, and the
+# cluster follows. Nothing reaches the cluster from outside: Argo CD pulls from GitHub.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/AndrewRaj0510/WikiGuard.git
+    targetRevision: main
+    path: k8s/argocd/apps
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

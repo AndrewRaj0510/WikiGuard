@@ -66,12 +66,25 @@ def _page(rows: list[dict[str, Any]], limit: int, cursor_of: Any) -> dict[str, A
     }
 
 
+def _window(conditions: list[str], params: dict[str, Any], snapshot: bool) -> None:
+    """Live data is limited to the edits still kept. A snapshot is shown whole (DEC-091)."""
+    if not snapshot:
+        conditions.append("e.edited_at >= now() - %(window)s::interval")
+        params["window"] = WINDOW
+
+
 def review_queue(
-    tx: Tx, editor: str, limit: int, cursor: str | None, include_reviewed: bool
+    tx: Tx,
+    editor: str,
+    limit: int,
+    cursor: str | None,
+    include_reviewed: bool,
+    snapshot: bool = False,
 ) -> dict[str, Any]:
     """Riskiest first. Editor type is a filter only: it never changes the order (DEC-053)."""
-    conditions = ["e.latest_score IS NOT NULL", "e.edited_at >= now() - %(window)s::interval"]
-    params: dict[str, Any] = {"window": WINDOW, "limit": limit + 1}
+    conditions = ["e.latest_score IS NOT NULL"]
+    params: dict[str, Any] = {"limit": limit + 1}
+    _window(conditions, params, snapshot)
     if editor != "all":
         conditions.append("e.is_anonymous = %(anonymous)s")
         params["anonymous"] = editor == "logged_out"
@@ -94,9 +107,10 @@ def review_queue(
     return _page(rows, limit, lambda row: [row["score"], row["rev_id"]])
 
 
-def live_feed(tx: Tx, limit: int, cursor: str | None) -> dict[str, Any]:
-    conditions = ["e.edited_at >= now() - %(window)s::interval"]
-    params: dict[str, Any] = {"window": WINDOW, "limit": limit + 1}
+def live_feed(tx: Tx, limit: int, cursor: str | None, snapshot: bool = False) -> dict[str, Any]:
+    conditions: list[str] = []
+    params: dict[str, Any] = {"limit": limit + 1}
+    _window(conditions, params, snapshot)
     if cursor:
         edited_at, rev_id = decode_cursor(cursor, (datetime, int))
         conditions.append("(e.edited_at, e.rev_id) < (%(edited_at)s, %(rev_id)s)")
@@ -105,7 +119,7 @@ def live_feed(tx: Tx, limit: int, cursor: str | None) -> dict[str, Any]:
         f"""
         SELECT {SUMMARY_COLUMNS}
         FROM edits e {JOIN_SCORE_AND_REVIEW}
-        WHERE {" AND ".join(conditions)}
+        {"WHERE " + " AND ".join(conditions) if conditions else ""}
         ORDER BY e.edited_at DESC, e.rev_id DESC
         LIMIT %(limit)s
         """,
@@ -180,24 +194,33 @@ RUN_DETAILS_DROPPED = (
 RUN_DETAILS_KEPT = "".join(f" - '{key}'" for key in RUN_DETAILS_DROPPED)
 
 
-def health_summary(tx: Tx) -> dict[str, Any]:
+def health_summary(tx: Tx, snapshot: bool = False) -> dict[str, Any]:
+    """The last 24 hours of scoring, live. A snapshot was scored once, so it's counted whole, and
+    the edits' first and last dates say what the data covers (DEC-091)."""
+    recent = "" if snapshot else "WHERE scored_at > now() - interval '24 hours'"
     counts = tx.one(
-        """
+        f"""
         SELECT count(*) AS scored,
                count(*) FILTER (WHERE used_fallback) AS fallback,
                count(*) FILTER (WHERE load_shed) AS shed,
                max(scored_at) AS last_scored_at
-        FROM scores WHERE scored_at > now() - interval '24 hours'
+        FROM scores {recent}
         """
     )
     assert counts is not None  # noqa: S101 - an aggregate always returns one row
-    unscored = tx.one(
-        "SELECT count(*) AS waiting FROM edits "
-        "WHERE latest_score IS NULL AND edited_at > now() - interval '3 days'"
-    )
+    kept = "" if snapshot else " AND edited_at > now() - interval '3 days'"
+    unscored = tx.one(f"SELECT count(*) AS waiting FROM edits WHERE latest_score IS NULL{kept}")
     assert unscored is not None  # noqa: S101
+    covered = (
+        tx.one("SELECT min(edited_at) AS first, max(edited_at) AS last FROM edits")
+        if snapshot
+        else None
+    )
     total = counts["scored"]
     return {
+        "data_mode": "snapshot" if snapshot else "live",
+        "data_from": covered["first"] if covered else None,
+        "data_to": covered["last"] if covered else None,
         "scored_last_24h": total,
         "fallback_rate_24h": counts["fallback"] / total if total else None,
         "load_shed_rate_24h": counts["shed"] / total if total else None,

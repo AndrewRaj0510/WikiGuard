@@ -38,31 +38,32 @@ WikiGuard helps patrollers decide where to look first. It works in four steps:
 
 WikiGuard is a portfolio project, built the way a production machine learning system would be, from the live data feed to the deployed app:
 
-- **Live data, not a fixed dataset.** Edits stream in through Redpanda, a Kafka-compatible message queue, and a rolling 30-day archive is kept as parquet files.
+- **A real streaming pipeline.** Edits stream in from Wikimedia through Redpanda, a Kafka-compatible message queue, and a rolling 30-day archive is kept as parquet files. It runs on Kubernetes on my machine against the live stream. No free server can run it around the clock, so the public demo serves a scored snapshot of real edits instead, and says so on every page (see [Project status](#project-status)).
 - **Five deep learning models, compared fairly.** An MLP, a BiLSTM with GloVe word vectors, DistilBERT, BERT, and RoBERTa, all in PyTorch. Each one trains on older edits and is tested on the newest ones, so no model sees the future. The best one serves, and the others step in if it fails. Which model is best is decided by the evaluation, never written into the code.
 - **Every experiment on record.** MLflow tracks each training run and holds the model registry, and DVC versions each dataset snapshot, both hosted on DagsHub.
 - **A model that watches itself.** Daily drift and accuracy reports, a strict test before a new model is promoted, a trial period where it scores live edits without being shown, and automatic rollback.
 - **A web app built for untrusted text.** Edits can contain anything, so the Next.js frontend shows them only as plain text, under a strict content security policy, and is tested against a set of XSS attacks and for accessibility (WCAG 2.1 AA). The FastAPI backend checks the user's role on every request.
-- **Real operations.** CI/CD on GitHub Actions with hash-locked dependencies and scanned images, Kubernetes (k3s) deployed by Argo CD, and Prometheus, Grafana, and Alertmanager for monitoring.
+- **Real operations.** CI/CD on GitHub Actions with hash-locked dependencies and scanned images, a Helm chart run on Kubernetes (kind) with Pod Security and default-deny networking, and Prometheus, Grafana, and Alertmanager for monitoring.
 - **Free to run.** Everything runs on free tiers. The only paid part is a small prepaid balance of OpenAI credits for the Explain button.
 
 ## Architecture
 
-The target system: color shows where each part runs. [Project status](#project-status) shows which parts are built and which are deployed.
+The full design: color shows where each part was meant to run. **What's deployed is smaller:** the frontend on Vercel, the API on Render, Postgres on Supabase, and the Worker. Everything marked k3s is built and runs on a local Kubernetes cluster (kind), not on a server, because Oracle's free VM never had capacity and no other free host is big enough. [Project status](#project-status) has the details.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/architecture_dark_2026-11-11.svg">
-  <img alt="WikiGuard architecture. Wikimedia's EventStreams feed the ingestor, which fetches diffs from the MediaWiki API and publishes edits to Redpanda. The scorer writes scores to Postgres on Supabase, the archiver writes every topic to a parquet archive on Oracle Object Storage, and the hourly labeler turns revert tags into labels. Continuous training reads the archive and promotes models in the DagsHub registry, which the scorer and the FastAPI API on Render load. A patroller reaches one Cloudflare Worker address, which sends /api to Render and pages to the Next.js app on Vercel. Explain calls an LLM." src="docs/images/readme/architecture_light_2026-11-11.svg">
+  <img alt="WikiGuard architecture. Wikimedia's EventStreams feed the ingestor, which fetches diffs from the MediaWiki API and publishes edits to Redpanda. The scorer writes scores to Postgres on Supabase, the archiver writes every topic to a parquet archive that's mirrored to Oracle Object Storage, and the hourly labeler turns revert tags into labels. Continuous training reads the archive and promotes models in the DagsHub registry, which the scorer and the FastAPI API on Render load. A patroller reaches one Cloudflare Worker address, which sends /api to Render and pages to the Next.js app on Vercel. Explain calls an LLM." src="docs/images/readme/architecture_light_2026-11-11.svg">
 </picture>
 
 | Component | Runs on | Role |
 |---|---|---|
 | `ingestor` | k3s | Reads the `recentchange` stream, keeps human edits to English Wikipedia articles, fetches each diff, and publishes it to `edits.raw` |
 | `scorer` | k3s | Scores each edit with the champion, falling back down the chain when a model fails, and writes scores to Postgres and `edits.scored` |
-| `archiver` | k3s | Writes edits, scores, and labels to compressed parquet in object storage, for a rolling 30 days |
+| `archiver` | k3s | Writes edits, scores, and labels to compressed parquet on the cluster's disk for a rolling 30 days, mirrored nightly to Oracle Object Storage |
 | `labeler` | k3s CronJob, hourly | Asks the MediaWiki API which edits got the `mw-reverted` tag, and finalizes each label at 48 hours |
 | `monitor` | k3s CronJob, daily | Live metrics, drift, calibration, and slice metrics from the archive. Asks for a retrain or a rollback, and never trains itself |
-| `retrain poller` and `trainer` | k3s Job | Builds a snapshot, trains candidates, runs the promotion gate and a shadow check, and updates the registry aliases |
+| `retrain poller` and `trainer` | k3s CronJob, and a Job for each request | The poller picks up each request and starts the trainer as a Kubernetes Job, which builds a snapshot, trains candidates, runs the promotion gate and a shadow check, and updates the registry aliases |
+| `backup` | k3s CronJob, nightly | Exports the tables that can't be rebuilt, encrypted to a public key the cluster can't decrypt with, to the bucket |
 | `api` | Render | FastAPI: review queue, edit detail, reviews, model leaderboard, health, `/predict`, and `/explain`. Owns sessions and roles |
 | `frontend` | Vercel | Next.js: landing page, live feed, review queue, edit detail with Explain, model pages, and health |
 | `edge` | Cloudflare Worker | The single site address: `/api` goes to Render and everything else to Vercel, so session cookies stay first-party |
@@ -146,11 +147,11 @@ Everything runs on free tiers except OpenAI API credits for Explain. When a limi
 | Monitoring | Evidently, Prometheus, Grafana, and Alertmanager |
 | Streaming | Redpanda (Kafka API), self-hosted |
 | Database | Postgres on Supabase, with row-level security on every table |
-| Archive | Parquet on Oracle Object Storage |
+| Archive | Parquet on the cluster's disk, mirrored nightly to Oracle Object Storage |
 | API | FastAPI on Render |
 | Frontend | Next.js 16, React 19, Tailwind CSS 4, on Vercel |
 | Edge | Cloudflare Worker |
-| Cluster | k3s on Oracle Cloud Always Free (ARM), Argo CD for GitOps |
+| Cluster | Kubernetes on kind, locally. Designed for k3s on Oracle Cloud Always Free with Argo CD; those scripts are written but never ran, because Oracle had no capacity |
 | CI/CD | GitHub Actions, GHCR, CodeQL, Trivy, pip-audit, gitleaks, Schemathesis, OWASP ZAP, Dependabot |
 | LLM | OpenAI API on prepaid credits, with Gemini's free tier as backup |
 | Alerts and admin | Sentry, Discord, UptimeRobot, Healthchecks.io, and Tailscale |
@@ -168,7 +169,7 @@ The project is built phase by phase. Model results are from a held-out test wind
 | 4 | Frontend | Done. Live on Vercel at [wiki-guard.vercel.app](https://wiki-guard.vercel.app); the console connects once the API is on Render (Phase 7) |
 | 5 | Monitoring and continuous training | Built and tested locally. Drift-to-promotion and label poisoning replayed on real data in a sandbox; the rollback replay and anything live are still to run |
 | 6 | CI/CD and security | Built and tested locally: full CI, hash-locked installs, multi-arch image pipeline, threat model. The workflows first run on GitHub when this is pushed; staging and deploys wait for Phase 7 |
-| 7 | Kubernetes and deployment | Not started |
+| 7 | Kubernetes and deployment | Built and run on a local cluster (kind) against the live Wikimedia stream: Helm chart, Pod Security, default-deny networking, Prometheus alerts, Grafana dashboards, encrypted backups with a timed restore. The VM was dropped, so the cluster isn't deployed. The demo's data and its "snapshot, not live" label are built; Render and the Cloudflare Worker wait on my accounts |
 | 8 | Production hardening | Not started |
 | 9 | Polish and demo | Not started |
 
@@ -190,7 +191,9 @@ jobs/retention/           keeps Supabase under its free limit
 packages/wikiguard_core/  shared code: schemas, features, diff parsing, the 5 models,
                           inference with the fallback chain, MLflow helpers
 notebooks/                Colab and Kaggle notebooks for GPU training
-k8s/                      Helm charts and Argo CD manifests (Phase 7)
+jobs/backup/              nightly encrypted backup, and the restore
+k8s/                      the Helm chart, platform values, Argo CD apps, and sealed secrets
+edge/                     the Cloudflare Worker: the single site address
 scripts/                  backfill, snapshots, evaluation, and one-off tools
 snapshots/                DVC pointers to the dataset snapshots and the golden set
 tests/                    tests and recorded Wikimedia fixtures
@@ -364,7 +367,7 @@ The golden set, `snapshots/golden-set-v1/`, is a frozen set of 200 edits that la
 
 ### Monitoring and continuous training
 
-The monitor or the owner adds a `retrain_requests` row, and the poller runs `TRAINER_COMMAND` with the request's kind and id. In the cluster these are CronJobs (Phase 7). By hand:
+The monitor or the owner adds a `retrain_requests` row, and the poller runs `TRAINER_COMMAND` with the request's kind and id. In the cluster the monitor and the poller are CronJobs, and the poller starts each run as a Kubernetes Job from the chart's template (`TRAINER_JOB_TEMPLATE`). By hand:
 
 ```powershell
 .venv\Scripts\python jobs\monitor\monitor.py                         # daily; Evidently needs the trainer's environment
@@ -415,6 +418,18 @@ Do these for each project, staging first:
 | `api_login` | `wikiguard_api` | API | Phase 3 |
 | `trainer_login` | `wikiguard_trainer` | Retrain-request poller, then trainer and monitor | Phase 3 |
 
+### Loading the demo's data
+
+The public demo's database holds the snapshot's test window (see [Project status](#project-status)). Into a migrated database with no other edits, from the repo root:
+
+```bash
+python scripts/sync_model_versions.py --runs data/runs              # the leaderboard's rows (DATABASE_URL)
+python scripts/load_demo.py snapshots/snapshot-20261104-28c825af4b19 --dry-run
+python scripts/load_demo.py snapshots/snapshot-20261104-28c825af4b19   # DATABASE_MIGRATIONS_URL
+```
+
+It needs the backfill's parts in `data/backfill/parts` and the trained runs in `data/runs`, loads in one transaction, and adds nothing on a second run. It refuses a database that already holds other edits. Then run the API with `DATA_MODE=snapshot`. Nothing runs the purge job on a schedule without the cluster, so run `jobs/purge` against the same database before the demo goes public, and now and then after.
+
 ### CI, delivery, and releases
 
 Workflows are in `.github/workflows/`. Every action is pinned to a commit, the token is read-only unless a job says otherwise, and CI holds no secrets, so a pull request from a fork runs the same checks with nothing to take. `tests/test_pipeline_rules.py` fails the build if a workflow, Dockerfile, or lock file breaks one of these rules.
@@ -423,11 +438,11 @@ Workflows are in `.github/workflows/`. Every action is pinned to a commit, the t
 |---|---|---|
 | `ci.yml` | Every pull request and push, and weekly | Lint and types; the Python suite on real Postgres and Redpanda, with coverage gates of 80% for the shared package and 70% for each service and job; the trainer's tests and a training smoke test on CPU PyTorch; the Compose end-to-end test; a build and Trivy scan of every image; the frontend checks; `pip-audit` and `npm audit`; gitleaks. A pull request runs only the jobs its files can affect |
 | `codeql.yml` | Every pull request and push, and weekly | Code scanning for Python, TypeScript, and the workflows themselves |
-| `cd.yml` | After CI passes on `main` | Builds every image for amd64 and arm64, scans it, and publishes it to GHCR. Then migrates, deploys, and smoke-tests staging, and repeats for production |
+| `cd.yml` | After CI passes on `main` | Builds every image for amd64 and arm64, scans it, and publishes it to GHCR. Then migrates, deploys, and smoke-tests staging, and repeats for production. For the cluster, opens a pull request that pins each image's digest, and Argo CD deploys it once merged |
 | `security-scan.yml` | By hand, and before a release | OWASP ZAP baseline and Schemathesis API fuzzing against staging |
 | `release.yml` | A `vX.Y.Z` tag | Gives the tested images the version name and publishes the changelog entry |
 
-The deploy half of `cd.yml` stays off until the repository variable `DEPLOY_ENABLED` is `true` (Phase 7). It needs two GitHub environments, `staging` and `production`, each with the secrets `DATABASE_MIGRATIONS_URL` and `RENDER_DEPLOY_HOOK_URL` and the variable `API_URL`.
+The deploy half of `cd.yml` stays off until the repository variable `DEPLOY_ENABLED` is `true`, and the cluster's pull request until `CLUSTER_ENABLED` is `true`. It needs two GitHub environments, `staging` and `production`, each with the secrets `DATABASE_MIGRATIONS_URL` and `RENDER_DEPLOY_HOOK_URL` and the variable `API_URL`.
 
 To rehearse CI's heavier jobs locally:
 
@@ -449,11 +464,31 @@ The frontend is deployed at [wiki-guard.vercel.app](https://wiki-guard.vercel.ap
 2. Add no environment variables. In production the Cloudflare Worker sends `/api` to Render, so Vercel never needs `API_ORIGIN`, and anything in a `NEXT_PUBLIC_` variable reaches every browser.
 3. Deploy, then check one page's headers for `content-security-policy` with a nonce: `curl -sI https://wiki-guard.vercel.app/`.
 
-Until the API is on Render (Phase 7), only the landing and privacy pages work there; the console says it can't reach the API.
+Until the API is on Render, only the landing and privacy pages work there; the console says it can't reach the API.
+
+**What the public demo shows.** The streaming pipeline can't run around the clock for free, so the demo serves a fixed set of real edits: the 25,294 English Wikipedia edits from 26 October to 2 November 2026 that form the models' test window, which no model trained on. Each carries the champion's stored test score and its real revert label, so the demo's numbers are the evaluation's numbers (PR-AUC 0.364). The API runs with `DATA_MODE=snapshot`, and every console page says the data is a snapshot, not live. `/predict` and Explain still run on request.
+
+### The cluster, the API on Render, and the edge
+
+Everything that runs in Kubernetes is in `k8s/`, and [k8s/README.md](k8s/README.md) has the steps: the chart, the Secrets each component needs, the VM, and what keeps it safe. To run the whole cluster half on the laptop with kind, against the live Wikimedia stream and with no account:
+
+```bash
+python scripts/kind_cluster.py up                                  # cluster, images, monitoring, chart
+bash scripts/check_network_policies.sh --context kind-wikiguard    # 13 allowed and refused connections
+kubectl --context kind-wikiguard -n monitoring port-forward svc/kps-grafana 13000:80
+node scripts/capture_grafana.mjs --password-file data/kind/grafana_password.txt
+python scripts/kind_cluster.py down
+```
+
+For a VM, `scripts/harden_vm.sh` and `scripts/bootstrap_cluster.sh` install k3s and Argo CD, which then pulls the rest from `main`. They were written for Oracle's free ARM VM and have never run on one: Oracle had no capacity.
+
+The API runs on Render's free plan from [render.yaml](render.yaml), which describes production and an on-demand staging service. Its build downloads the champion and the MLP into the image (`PREFETCH_MODELS=true`), so a wake from sleep needs no download.
+
+The single site address is a Cloudflare Worker ([edge/](edge/)): `/api` goes to Render and everything else to Vercel, so the session cookie stays first-party. Its tests use Node's own runner: `node --test edge/worker.test.mjs`. To deploy it, from `edge/`: `npx wrangler secret put EDGE_SHARED_SECRET` (the same value as the API's), then `npx wrangler deploy`.
 
 ## Design notes
 
-The design notes are kept locally and aren't in this repo: the full plan and task list, a step-by-step walkthrough, the threat model and privacy record, 82 recorded decisions with the alternatives rejected, findings with their evidence, the evaluation method, and every measured result. Only the images this README uses are tracked, in `docs/images/readme/`.
+The design notes are kept locally and aren't in this repo: the full plan and task list, a step-by-step walkthrough, the threat model and privacy record, 90 recorded decisions with the alternatives rejected, findings with their evidence, the evaluation method, and every measured result. Only the images this README uses are tracked, in `docs/images/readme/`.
 
 ## Data and attribution
 

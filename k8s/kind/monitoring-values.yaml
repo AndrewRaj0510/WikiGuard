@@ -1,0 +1,7 @@
+# kind only, on top of k8s/platform/monitoring-values.yaml: no volume for Prometheus (the laptop's
+# cluster is thrown away), and a shorter memory.
+prometheus:
+  prometheusSpec:
+    retention: 3d
+    retentionSize: 2GB
+    storageSpec: {}

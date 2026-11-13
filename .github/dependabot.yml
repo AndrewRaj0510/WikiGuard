@@ -26,6 +26,7 @@ updates:
       - /jobs/purge
       - /jobs/retention
       - /jobs/retrain_poller
+      - /jobs/backup
       - /jobs/trainer
     schedule: { interval: weekly }
     groups:
@@ -49,6 +50,7 @@ updates:
       - /jobs/purge
       - /jobs/retention
       - /jobs/retrain_poller
+      - /jobs/backup
       - /jobs/trainer
     schedule: { interval: weekly }
     # One pull request for the routine updates, so the lock files move together. Security

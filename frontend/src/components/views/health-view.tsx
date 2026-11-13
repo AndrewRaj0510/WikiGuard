@@ -41,13 +41,18 @@ export function HealthView() {
       <PageHeader
         eyebrow="Operations"
         title="Health"
-        lede="How the live system is doing: scoring volume, which models are answering, accuracy measured from community reverts, drift, and every retrain. These charts come from the API; Grafana stays private."
+        lede={
+          summary?.data_mode === "snapshot"
+            ? "How the system did on the demo’s dataset: scoring, which models are answering, accuracy measured from community reverts, drift, and every retrain. These charts come from the API; Grafana stays private."
+            : "How the live system is doing: scoring volume, which models are answering, accuracy measured from community reverts, drift, and every retrain. These charts come from the API; Grafana stays private."
+        }
         aside={
           <LiveStatus
             paused={health.paused}
             error={health.error}
             updatedAt={health.updatedAt}
             serverStale={summary?.stale}
+            snapshot={summary?.data_mode === "snapshot"}
           />
         }
       />
@@ -114,8 +119,12 @@ function Signals({ summary }: { summary: HealthSummary }) {
 
 function Tiles({ summary }: { summary: HealthSummary }) {
   const now = useNow();
+  const snapshot = summary.data_mode === "snapshot";
   const tiles = [
-    { label: "Scored in the last 24 h", value: summary.scored_last_24h.toLocaleString("en-US") },
+    {
+      label: snapshot ? "Edits scored in the dataset" : "Scored in the last 24 h",
+      value: summary.scored_last_24h.toLocaleString("en-US"),
+    },
     { label: "Scored by a fallback", value: rate(summary.fallback_rate_24h) },
     { label: "Scored by a faster model under load", value: rate(summary.load_shed_rate_24h) },
     {
@@ -126,7 +135,7 @@ function Tiles({ summary }: { summary: HealthSummary }) {
     { label: "Waiting to be scored", value: summary.unscored_edits.toLocaleString("en-US") },
   ];
   return (
-    <section aria-label="Scoring in the last day" className="grid gap-px overflow-hidden rounded-lg border bg-border sm:grid-cols-5">
+    <section aria-label={snapshot ? "Scoring of the dataset" : "Scoring in the last day"} className="grid gap-px overflow-hidden rounded-lg border bg-border sm:grid-cols-5">
       {tiles.map((tile) => (
         <div key={tile.label} className="bg-card px-5 py-4" title={tile.title}>
           <p className="font-mono text-[26px] leading-none font-medium tracking-tight tabular">

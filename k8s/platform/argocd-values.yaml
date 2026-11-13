@@ -1,0 +1,45 @@
+# Argo CD 3.6 (chart 10.18.0), sized for one small VM. It only pulls from GitHub, so it needs no
+# inbound access: the owner reaches its UI through Tailscale or a port-forward, never the internet.
+global:
+  # Argo CD's own pods all meet "restricted" Pod Security. The namespace still runs at baseline
+  # (k8s/platform/namespaces.yaml), because Redis's init step needs it.
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+
+configs:
+  params:
+    # TLS is Tailscale's job here, so the server doesn't need its own certificate.
+    server.insecure: true
+  cm:
+    # Check GitHub every 3 minutes. A webhook would need an inbound path, which the cluster has none of.
+    timeout.reconciliation: 180s
+    # No anonymous access, no local accounts besides admin.
+    users.anonymous.enabled: "false"
+    admin.enabled: "true"
+
+# Not used: single sign-on, notifications, and generated Applications.
+dex:
+  enabled: false
+notifications:
+  enabled: false
+applicationSet:
+  replicas: 0
+
+controller:
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { cpu: "1", memory: 768Mi }
+repoServer:
+  resources:
+    requests: { cpu: 25m, memory: 128Mi }
+    limits: { cpu: 500m, memory: 512Mi }
+server:
+  resources:
+    requests: { cpu: 25m, memory: 64Mi }
+    limits: { cpu: 300m, memory: 256Mi }
+redis:
+  resources:
+    requests: { cpu: 10m, memory: 32Mi }
+    limits: { cpu: 200m, memory: 128Mi }

@@ -18,7 +18,7 @@ function client(api = createFakeApi(), csrfToken: string | null = "csrf-1") {
 describe("requests", () => {
   it("sends the tab ID on reads but never the CSRF token", async () => {
     const { api, client: c } = client();
-    api.on("GET", "/v1/feed", json({ items: [], next_cursor: null, stale: false }));
+    api.on("GET", "/v1/feed", json({ items: [], next_cursor: null, stale: false, data_mode: "live" }));
     await c.feed({ limit: 50 });
     const [sent] = api.calls("GET", "/v1/feed");
     expect(sent.headers["x-tab-id"]).toBe("tab-12345678");
@@ -38,7 +38,7 @@ describe("requests", () => {
 
   it("leaves out empty query values", async () => {
     const { api, client: c } = client();
-    api.on("GET", "/v1/queue", json({ items: [], next_cursor: null, stale: false }));
+    api.on("GET", "/v1/queue", json({ items: [], next_cursor: null, stale: false, data_mode: "live" }));
     await c.queue({ editor: "logged_out", cursor: null, limit: 50 });
     expect(api.calls("GET", "/v1/queue")[0].path).toBe("/v1/queue?editor=logged_out&limit=50");
   });

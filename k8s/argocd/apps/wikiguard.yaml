@@ -1,0 +1,35 @@
+# WikiGuard itself. images.yaml holds each image's digest, which CD's pull request updates after a
+# build passes its scan (DEC-084), so the cluster runs exactly what was tested and nothing that
+# merely shares a tag.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: wikiguard
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/AndrewRaj0510/WikiGuard.git
+    targetRevision: main
+    path: k8s/charts/wikiguard
+    helm:
+      valueFiles:
+        - values.yaml
+        - images.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: wikiguard
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 5
+      backoff: { duration: 30s, factor: 2, maxDuration: 10m }
+  # Argo CD would otherwise fight the CronJobs' own record of their last runs.
+  ignoreDifferences:
+    - group: batch
+      kind: CronJob
+      jsonPointers: [/status]

@@ -27,6 +27,7 @@ GATES = {
     "jobs/purge/": SERVICE_GATE,
     "jobs/retention/": SERVICE_GATE,
     "jobs/retrain_poller/": SERVICE_GATE,
+    "jobs/backup/": SERVICE_GATE,
 }
 
 

@@ -56,7 +56,10 @@ TAB_HEADER = "x-tab-id"
 CSRF_HEADER = "x-csrf-token"
 REQUEST_ID_HEADER = "x-request-id"
 EDGE_SECRET_HEADER = "x-edge-secret"  # noqa: S105 - a header name
-EDGE_CLIENT_IP_HEADER = "cf-connecting-ip"
+# Set by the Worker (edge/worker.js), and believed only with the secret above. Not
+# cf-connecting-ip: Cloudflare sets that one itself on a Worker's requests out, to its own
+# address, and Render sits behind Cloudflare too, so it can't carry the visitor (DEC-086).
+EDGE_CLIENT_IP_HEADER = "x-wikiguard-client-ip"
 REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9-]{8,64}$")
 # /health must stay reachable from Render's own checks, which don't come through the Worker.
 EDGE_EXEMPT_PATHS = {"/health"}
@@ -698,6 +701,9 @@ def create_app(
 
     # --- Reading ---
 
+    data_mode = settings.data_mode
+    snapshot = data_mode == "snapshot"
+
     @app.get("/v1/queue", response_model=models.EditPage, tags=["edits"])
     def review_queue(
         request: Request,
@@ -710,10 +716,12 @@ def create_app(
     ) -> Response:
         def load() -> dict[str, Any]:
             with context.db.tx() as tx:
-                return queries.review_queue(tx, editor, limit, cursor, include_reviewed)
+                return queries.review_queue(
+                    tx, editor, limit, cursor, include_reviewed, snapshot=snapshot
+                )
 
         page, stale = context.queue_cache.get((editor, limit, cursor, include_reviewed), load)
-        return etag_json(request, page | {"stale": stale})
+        return etag_json(request, page | {"stale": stale, "data_mode": data_mode})
 
     @app.get("/v1/feed", response_model=models.EditPage, tags=["edits"])
     def live_feed(
@@ -725,10 +733,10 @@ def create_app(
     ) -> Response:
         def load() -> dict[str, Any]:
             with context.db.tx() as tx:
-                return queries.live_feed(tx, limit, cursor)
+                return queries.live_feed(tx, limit, cursor, snapshot=snapshot)
 
         page, stale = context.feed_cache.get((limit, cursor), load)
-        return etag_json(request, page | {"stale": stale})
+        return etag_json(request, page | {"stale": stale, "data_mode": data_mode})
 
     @app.get("/v1/edits/{rev_id}", response_model=models.EditDetail, tags=["edits"])
     def edit_detail(rev_id: int, context: Ctx, _: Seated) -> dict[str, Any]:
@@ -751,7 +759,7 @@ def create_app(
     def health_summary(request: Request, context: Ctx, _: Seated) -> Response:
         def load() -> dict[str, Any]:
             with context.db.tx() as tx:
-                return queries.health_summary(tx)
+                return queries.health_summary(tx, snapshot=snapshot)
 
         summary, stale = context.health_cache.get("summary", load)
         chain = context.chain

@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
 
 const NAV = [
   { href: "/queue", label: "Queue" },
-  { href: "/feed", label: "Live feed" },
+  { href: "/feed", label: "Edit feed" },
   { href: "/models", label: "Models" },
   { href: "/health", label: "Health" },
 ] as const;

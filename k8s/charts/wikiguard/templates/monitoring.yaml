@@ -1,0 +1,210 @@
+{{- if .Values.monitoring.enabled }}
+{{- /*
+What Prometheus scrapes, what it alerts on, and the dashboards Grafana loads. Needs
+kube-prometheus-stack's CRDs (k8s/platform). Alertmanager sends every alert to Discord, and the
+always-firing Watchdog to Healthchecks.io as the cluster's heartbeat (k8s/platform/monitoring.yaml).
+
+Section 11's alerts, and where each comes from:
+  consumer lag > 5 min, fallback rate > 5%, ingestor disconnected > 2 min   the services' metrics
+  DLQ growing, archive stalled                                               the services' metrics
+  labeler or monitor missed, backup failed                                   kube-state-metrics
+  disk over 80%, VM close to Oracle's idle-reclaim rule                     node-exporter
+  free tier over 80%: archive vs Oracle's 20 GB                              the archiver's metric
+  free tier: Supabase storage, LLM calls                                     Grafana's Postgres
+                                                                             panels (DEC-085)
+Certificate expiry has no rule: no certificate lives in the cluster. Cloudflare, Render, and Vercel
+hold the public ones, and Tailscale its own.
+*/}}
+{{- range $name, $worker := .Values.workers }}
+{{- if $worker.enabled }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: wikiguard-{{ $name }}
+  labels:
+    {{- include "wikiguard.labels" $ | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "wikiguard.selector" $name | nindent 6 }}
+  endpoints:
+    - port: ops
+      path: /metrics
+      interval: 30s
+{{- end }}
+{{- end }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: wikiguard-redpanda
+  labels:
+    {{- include "wikiguard.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "wikiguard.selector" "redpanda" | nindent 6 }}
+  podMetricsEndpoints:
+    - port: admin
+      path: /public_metrics
+      interval: 30s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: wikiguard
+  labels:
+    {{- include "wikiguard.labels" . | nindent 4 }}
+spec:
+  groups:
+    - name: wikiguard.pipeline
+      rules:
+        - alert: IngestorDisconnected
+          # English Wikipedia sees about one article edit a second, so none for two minutes means
+          # the stream is down or the ingestor is stuck. "or vector(0)": with the ingestor gone,
+          # the sum has no series at all, and a rule on nothing never fires (F-145).
+          expr: (sum(rate(ingestor_published_total[2m])) or vector(0)) == 0
+          for: 2m
+          labels: { severity: critical }
+          annotations:
+            summary: No edits published for 2 minutes
+            runbook: docs/runbooks/ingest-outage.md
+        - alert: ScorerLagging
+          expr: >-
+            histogram_quantile(0.95, sum by (le) (rate(scorer_edit_to_score_seconds_bucket[10m])))
+            > 300
+          for: 5m
+          labels: { severity: warning }
+          annotations:
+            summary: Edits take over 5 minutes from Wikipedia to a score (p95)
+            runbook: docs/runbooks/scorer-lag.md
+        - alert: ScorerBacklog
+          expr: max(scorer_consumer_lag) > 500
+          for: 10m
+          labels: { severity: warning }
+          annotations:
+            summary: The scorer is over 500 edits behind
+            runbook: docs/runbooks/scorer-lag.md
+        - alert: FallbackRateHigh
+          expr: >-
+            sum(rate(scorer_edits_scored_total{fallback="true"}[15m]))
+            / sum(rate(scorer_edits_scored_total[15m])) > 0.05
+          for: 15m
+          labels: { severity: warning }
+          annotations:
+            summary: Over 5% of edits were scored by a fallback model
+            runbook: docs/runbooks/bad-model.md
+        - alert: ScorerLoadShedding
+          expr: max(scorer_load_shedding) == 1
+          for: 15m
+          labels: { severity: warning }
+          annotations:
+            summary: The scorer has used only the fast models for 15 minutes
+        - alert: DeadLetterQueueGrowing
+          expr: >-
+            sum(increase(scorer_dlq_total[30m])) + sum(increase(ingestor_dead_letters_total[30m]))
+            > 20
+          labels: { severity: warning }
+          annotations:
+            summary: Over 20 edits went to the dead-letter queue in 30 minutes
+        - alert: ArchiveStalled
+          expr: (sum(increase(archiver_rows_written_total[30m])) or vector(0)) == 0
+          for: 30m
+          labels: { severity: warning }
+          annotations:
+            summary: Nothing written to the archive for an hour
+        - alert: WikiGuardWorkerMissing
+          # A scaled-down or deleted worker has no target, so `up == 0` can't see it.
+          expr: >-
+            absent(up{namespace="{{ .Release.Namespace }}", job="wikiguard-ingestor"})
+            or absent(up{namespace="{{ .Release.Namespace }}", job="wikiguard-scorer"})
+            or absent(up{namespace="{{ .Release.Namespace }}", job="wikiguard-archiver"})
+          for: 5m
+          labels: { severity: critical }
+          annotations:
+            summary: A WikiGuard worker has no running pod
+        - alert: WikiGuardTargetDown
+          expr: up{namespace="{{ .Release.Namespace }}"} == 0
+          for: 5m
+          labels: { severity: critical }
+          annotations:
+            summary: "{{ "{{ $labels.job }}" }} hasn't answered a scrape for 5 minutes"
+    - name: wikiguard.jobs
+      rules:
+        - alert: LabelerMissed
+          expr: >-
+            time() - kube_cronjob_status_last_successful_time{namespace="{{ .Release.Namespace }}",
+            cronjob="wikiguard-labeler"} > 3 * 3600
+          labels: { severity: warning }
+          annotations:
+            summary: The hourly labeler hasn't succeeded for 3 hours
+        - alert: DailyJobMissed
+          expr: >-
+            time() - kube_cronjob_status_last_successful_time{namespace="{{ .Release.Namespace }}",
+            cronjob=~"wikiguard-(monitor|purge|purge-snapshots|retention|archive-maintenance)"}
+            > 26 * 3600
+          labels: { severity: warning }
+          annotations:
+            summary: "{{ "{{ $labels.cronjob }}" }} hasn't succeeded for over a day"
+        - alert: BackupFailed
+          expr: >-
+            time() - kube_cronjob_status_last_successful_time{namespace="{{ .Release.Namespace }}",
+            cronjob="wikiguard-backup"} > 26 * 3600
+          labels: { severity: critical }
+          annotations:
+            summary: No successful backup for over a day
+            runbook: docs/runbooks/backup-restore.md
+        - alert: RetrainPollerMissed
+          expr: >-
+            time() - kube_cronjob_status_last_successful_time{namespace="{{ .Release.Namespace }}",
+            cronjob="wikiguard-retrain-poller"} > 15 * 60
+          labels: { severity: warning }
+          annotations:
+            summary: The retrain poller hasn't finished a run for 15 minutes
+    - name: wikiguard.capacity
+      rules:
+        - alert: DiskOver80Percent
+          expr: >-
+            1 - node_filesystem_avail_bytes{mountpoint="/",fstype!~"tmpfs|overlay"}
+            / node_filesystem_size_bytes{mountpoint="/",fstype!~"tmpfs|overlay"} > 0.8
+          for: 15m
+          labels: { severity: warning }
+          annotations:
+            summary: The node's disk is over 80% full
+        - alert: ArchiveNearObjectStorageLimit
+          # The mirror has to fit Oracle's 20 GB of free Object Storage, backups included.
+          expr: max(archiver_archive_bytes) > 0.8 * 20 * 1024^3
+          labels: { severity: warning }
+          annotations:
+            summary: The archive is over 80% of Oracle's 20 GB free Object Storage
+        - alert: VmCouldBeReclaimed
+          # Oracle may reclaim an A1 VM whose 95th-percentile CPU and memory both stay under 20%
+          # for 7 days (docs/cost.md). Warn on 6 days, so there's a day to act.
+          expr: >-
+            quantile_over_time(0.95, (1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m])))[6d:1h])
+            < 0.2
+            and on()
+            quantile_over_time(0.95, (1 - sum(node_memory_MemAvailable_bytes)
+            / sum(node_memory_MemTotal_bytes))[6d:1h]) < 0.2
+          labels: { severity: warning }
+          annotations:
+            summary: The VM has looked idle to Oracle's rule for 6 days
+---
+{{- /* Each dashboard file becomes a ConfigMap Grafana's sidecar picks up. */}}
+{{- range $path, $_ := .Files.Glob "dashboards/*.json" }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wikiguard-dashboard-{{ base $path | trimSuffix ".json" }}
+  labels:
+    {{- include "wikiguard.labels" $ | nindent 4 }}
+    grafana_dashboard: "1"
+  annotations:
+    grafana_folder: WikiGuard
+data:
+  {{ base $path }}: |-
+    {{- $.Files.Get $path | nindent 4 }}
+{{- end }}
+{{- end }}

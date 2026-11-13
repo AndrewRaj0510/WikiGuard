@@ -27,6 +27,7 @@ from typing import Any
 import numpy as np
 import torch
 from wikiguard_core.alerts import Alerter
+from wikiguard_core.archive import Root
 from wikiguard_core.artifacts import ArtifactError, verify_artifact
 from wikiguard_core.chain import CANDIDATE_ALIAS, SMOKE_EDIT, ModelCache
 from wikiguard_core.features import FEATURE_VERSION, build_features
@@ -115,7 +116,7 @@ def sanity_checks(data: Dataset, models: tuple[str, ...]) -> dict[str, Any]:
 class Paths:
     workdir: Path
     snapshots: Path
-    archive: Path
+    archive: Root
     golden: Path
     images: Path
     cache: Path

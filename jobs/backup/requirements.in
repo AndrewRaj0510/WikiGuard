@@ -1,0 +1,7 @@
+# The nightly backup (backup.py) and the restore (restore.py, run by hand).
+psycopg[binary]==3.3.8
+pydantic-settings==2.16.2
+httpx==0.28.1
+pyarrow==26.0.1
+# Already in the monitor's and trainer's locks. X25519, HKDF, and AES-GCM for the backup file.
+cryptography==50.0.2

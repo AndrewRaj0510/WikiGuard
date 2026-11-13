@@ -1,0 +1,74 @@
+# The API on Render's free plan (D3, DEC-019): production, and a staging copy used on demand.
+# The owner creates both from this Blueprint in Render's dashboard (New > Blueprint), then fills in
+# each value marked `sync: false` there. No secret is in this file.
+#
+# Both share the 750 free hours a month, so staging is suspended between uses, and nothing pings
+# either one to keep it awake (F-015). CD deploys a tested commit through each service's deploy
+# hook, so Render's own auto-deploy is off (DEC-078).
+services:
+  - type: web
+    name: wikiguard-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./services/api/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    autoDeployTrigger: "off"
+    envVars:
+      - { key: ENVIRONMENT, value: prod }
+      # DEC-091: the database holds the demo's scored snapshot (scripts/load_demo.py), not live edits.
+      - { key: DATA_MODE, value: snapshot }
+      - { key: PORT, value: "8000" }
+      # Builds RoBERTa and the MLP into the image, so a wake doesn't download them (D3).
+      - { key: PREFETCH_MODELS, value: "true" }
+      - { key: MODEL_SOURCE, value: mlflow }
+      - { key: MLFLOW_TRACKING_URI, value: "https://dagshub.com/AndrewRaj0510/WikiGuard.mlflow" }
+      - { key: MODEL_CHAIN_MODE, value: champion_and_last }
+      # A reload would hold two models in 512 MB, so Render reads the aliases only at start (DEC-055).
+      - { key: MODEL_POLL_SECONDS, value: "0" }
+      - { key: PREDICT_TIMEOUT_MS, value: "5000" }
+      - { key: SESSION_SECRET_KEY, generateValue: true }
+      - { key: METRICS_BEARER_TOKEN, generateValue: true }
+      # The Supabase transaction pooler, as the api_login role (README.md). Never the owner's login.
+      - { key: DATABASE_URL, sync: false }
+      # From scripts/hash_password.py: the hash, never the password.
+      - { key: USER_PASSWORD_HASH, sync: false }
+      # The same value as the Worker's secret (edge/wrangler.toml), so direct requests are refused.
+      - { key: EDGE_SHARED_SECRET, sync: false }
+      # The Worker's address, https://wikiguard.SUBDOMAIN.workers.dev.
+      - { key: CORS_ALLOWED_ORIGINS, sync: false }
+      - { key: LLM_MODEL, sync: false }
+      - { key: LLM_BACKUP_MODEL, sync: false }
+      - { key: OPENAI_API_KEY, sync: false }
+      - { key: GEMINI_API_KEY, sync: false }
+      - { key: EXPLAIN_DAILY_CALL_CAP, sync: false }
+      - { key: SENTRY_DSN, sync: false }
+
+  - type: web
+    name: wikiguard-api-staging
+    runtime: docker
+    plan: free
+    dockerfilePath: ./services/api/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    autoDeployTrigger: "off"
+    envVars:
+      - { key: ENVIRONMENT, value: staging }
+      # DEC-091: the database holds the demo's scored snapshot (scripts/load_demo.py), not live edits.
+      - { key: DATA_MODE, value: snapshot }
+      - { key: PORT, value: "8000" }
+      - { key: PREFETCH_MODELS, value: "true" }
+      - { key: MODEL_SOURCE, value: mlflow }
+      - { key: MLFLOW_TRACKING_URI, value: "https://dagshub.com/AndrewRaj0510/WikiGuard.mlflow" }
+      - { key: MODEL_CHAIN_MODE, value: champion_and_last }
+      - { key: MODEL_POLL_SECONDS, value: "0" }
+      - { key: PREDICT_TIMEOUT_MS, value: "5000" }
+      - { key: SESSION_SECRET_KEY, generateValue: true }
+      - { key: METRICS_BEARER_TOKEN, generateValue: true }
+      # The staging Supabase project's own login. Staging never touches production data (section 14).
+      - { key: DATABASE_URL, sync: false }
+      - { key: USER_PASSWORD_HASH, sync: false }
+      # Blank on staging: the scans and the smoke test call it directly (DEC-080).
+      - { key: CORS_ALLOWED_ORIGINS, sync: false }
+      # Explain stays off on staging, so a scan can't spend LLM credits.
+      - { key: EXPLAIN_ENABLED, value: "false" }

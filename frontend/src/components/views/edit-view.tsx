@@ -56,8 +56,8 @@ function EditLoader({ revId }: { revId: number }) {
       <Frame>
         {edit.error.code === "edit_not_found" ? (
           <EmptyState title="No such edit">
-            WikiGuard keeps edits for three days, so this one may have been removed, or it was
-            never scored.
+            This edit isn’t in WikiGuard’s database: it may have been removed, or it was never
+            scored.
           </EmptyState>
         ) : (
           <ErrorState error={edit.error} onRetry={edit.refresh} />

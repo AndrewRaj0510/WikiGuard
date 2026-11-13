@@ -1,0 +1,4 @@
+# Written by CD's image pull request after a build is scanned and published (DEC-084). Each name
+# maps to the digest of its multi-arch image, so the cluster pulls exactly what was tested.
+# Empty until the first published build: the chart then uses the `main` tag.
+digests: {}

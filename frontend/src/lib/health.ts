@@ -4,6 +4,7 @@
  * before use, and anything malformed is skipped instead of breaking the page.
  */
 import type { HealthSummary } from "./api/types";
+import { formatDay } from "./format";
 
 export interface LiveMetric {
   day: string;
@@ -215,8 +216,22 @@ export const STALE_SCORING_MINUTES = 10;
  * What, if anything, the banner should say. Worst first. Kept apart from React so it's tested
  * against every case.
  */
+/**
+ * DEC-091: the public demo serves a fixed set of real edits, scored once, not the live stream.
+ * The API says so in `data_mode`, and every console page says it in words.
+ */
+export function snapshotNotice(summary: HealthSummary): string | null {
+  if (summary.data_mode !== "snapshot") return null;
+  const span =
+    summary.data_from && summary.data_to
+      ? ` from ${formatDay(summary.data_from)} to ${formatDay(summary.data_to)}`
+      : "";
+  return `${summary.scored_last_24h.toLocaleString("en-US")} real English Wikipedia edits${span}, scored once by the champion model, with their real revert labels. Not live.`;
+}
+
 export function healthSignals(summary: HealthSummary, now: number): HealthSignal[] {
   const signals: HealthSignal[] = [];
+  const snapshot = summary.data_mode === "snapshot";
   const open = summary.chain.filter((item) => item.breaker !== "closed");
   if (summary.models_loaded && open.length) {
     signals.push({
@@ -229,10 +244,11 @@ export function healthSignals(summary: HealthSummary, now: number): HealthSignal
     signals.push({
       tone: "warn",
       title: "Degraded",
-      detail: `${Math.round(summary.fallback_rate_24h * 100)}% of the last day’s edits were scored by a fallback model.`,
+      detail: `${Math.round(summary.fallback_rate_24h * 100)}% of ${snapshot ? "the dataset’s" : "the last day’s"} edits were scored by a fallback model.`,
     });
   }
-  if (summary.last_scored_at && summary.scored_last_24h > 0) {
+  // A snapshot was scored once, so its last score is old by design, not a stopped scorer.
+  if (!snapshot && summary.last_scored_at && summary.scored_last_24h > 0) {
     const minutes = (now - Date.parse(summary.last_scored_at)) / 60_000;
     if (minutes >= STALE_SCORING_MINUTES) {
       signals.push({

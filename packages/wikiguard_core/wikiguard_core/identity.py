@@ -79,10 +79,19 @@ def redact_identifiers(text: str) -> str:
     return IPV6_CANDIDATE.sub(_redact_ipv6, text)
 
 
+# httpx and httpcore log each request's full URL at INFO. A URL can hold a secret (a Discord
+# webhook, a Healthchecks.io ping) or an editor's name (list=users), so only their warnings and
+# errors get through (F-143).
+QUIET_BELOW_WARNING = ("httpx", "httpcore")
+
+
 class RedactingFilter(logging.Filter):
-    """Attach to a log handler so an identifier in any message never reaches the logs."""
+    """Attach to a log handler so an identifier in any message never reaches the logs, and
+    request URLs from the HTTP client are never written at all."""
 
     def filter(self, record: logging.LogRecord) -> bool:
+        if record.levelno < logging.WARNING and record.name.startswith(QUIET_BELOW_WARNING):
+            return False
         record.msg = redact_identifiers(record.getMessage())
         record.args = None
         return True

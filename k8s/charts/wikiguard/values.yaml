@@ -1,0 +1,261 @@
+# Production values: k3s on the Oracle VM, synced by Argo CD. values-kind.yaml lists what differs
+# on the laptop. Secrets never appear here: each component reads one Secret, wikiguard-NAME, made
+# from a SealedSecret in k8s/secrets/ (k8s/README.md).
+
+environment: prod
+
+image:
+  registry: ghcr.io/andrewraj0510
+  prefix: wikiguard
+  # Used only for an image images.yaml has no digest for yet. A digest never moves, a tag can.
+  tag: main
+  pullPolicy: IfNotPresent
+
+# Filled in by CD after each published build (images.yaml, DEC-084): name -> sha256 digest.
+digests: {}
+
+# Settings every component may read. Nothing secret: those are in each component's Secret.
+# An empty value counts as unset, so the code's default applies.
+config:
+  ENVIRONMENT: prod
+  LOG_LEVEL: INFO
+  KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+  # Wikimedia asks for a descriptive name and a way to reach the operator.
+  WIKIMEDIA_USER_AGENT: "WikiGuard/0.7 (https://github.com/AndrewRaj0510/WikiGuard; cluster)"
+  MODEL_SOURCE: mlflow
+  # Read without a login: serving needs no MLflow secret (F-093).
+  MLFLOW_TRACKING_URI: https://dagshub.com/AndrewRaj0510/WikiGuard.mlflow
+  MODEL_CHAIN_MODE: full
+  PREDICT_TIMEOUT_MS: "300"
+  ONNX_THREADS: "1"
+  OPS_PORT: "8000"
+  # The archive's working copy is the PVC below, mirrored nightly to the bucket (DEC-083).
+  ARCHIVE_STORE: local
+  ARCHIVE_PATH: /archive
+  ARCHIVE_RETENTION_DAYS: "30"
+  ARCHIVE_MIRROR_PREFIX: archive
+  # Oracle Object Storage. The owner fills these in when the bucket exists. Keys are secrets.
+  ARCHIVE_S3_ENDPOINT: ""
+  ARCHIVE_S3_REGION: ""
+  ARCHIVE_S3_BUCKET: ""
+  BACKUP_PATH: backups
+  # Public half only (jobs/backup). The private half stays in the owner's password manager.
+  BACKUP_PUBLIC_KEY: ""
+  RETRAIN_INTERVAL_DAYS: "7"
+  RETRAIN_ON_DRIFT: "true"
+  RETRAIN_STARTUP_DELAY_SECONDS: "300"
+  RETRAIN_THREADS: "2"
+  SHADOW_HOURS: "24"
+  TRAINER_COMMAND: python -m trainer.lifecycle
+  TRAINER_JOB_TEMPLATE: /etc/wikiguard/trainer-job.json
+  SNAPSHOT_GC_ENABLED: "false"
+
+# Where the DVC checkout for the trainer and the snapshot purge comes from. Public (DEC-043).
+repo:
+  url: https://github.com/AndrewRaj0510/WikiGuard.git
+  branch: main
+
+storage:
+  # k3s's built-in local-path provisioner. One node, so ReadWriteOnce still lets every pod on it
+  # mount the same volume.
+  className: local-path
+  archive: 10Gi
+  ingestorState: 64Mi
+  models: 4Gi
+  trainerCache: 20Gi
+  redpanda: 10Gi
+  # Only without a bucket (kind). In production, backups go to Object Storage.
+  backups: ""
+
+priorityClasses:
+  # The stream must keep moving: scoring and ingesting go first when the VM is short.
+  critical: 100000
+  batch: 1000
+  # Training can never push the scorer off the node (preemptionPolicy: Never).
+  training: 100
+
+redpanda:
+  enabled: true
+  image: redpandadata/redpanda:v26.2.6@sha256:8b1076e0d61bfceb66594dc01536427ce0b529f8ead35fdab9763ab6085891ce
+  memory: 1G
+  resources:
+    requests: { cpu: 250m, memory: 1280Mi }
+    limits: { cpu: "1", memory: 1536Mi }
+
+# Long-running workers. Each serves /health and /metrics on 8000.
+workers:
+  ingestor:
+    enabled: true
+    image: ingestor
+    priority: critical
+    env:
+      INGEST_STATE_PATH: /state/ingestor_state.json
+    volumes: [ingestorState]
+    egress: [internet, redpanda]
+    resources:
+      requests: { cpu: 50m, memory: 128Mi }
+      limits: { cpu: 500m, memory: 384Mi }
+  scorer:
+    enabled: true
+    image: scorer
+    priority: critical
+    env:
+      MODEL_CACHE_DIR: /models/cache
+      HOME: /tmp
+    volumes: [models]
+    egress: [internet, redpanda, database]
+    # The first start downloads five models from DagsHub before it's healthy.
+    startupSeconds: 900
+    resources:
+      requests: { cpu: 500m, memory: 1536Mi }
+      limits: { cpu: 1500m, memory: 3Gi }
+  archiver:
+    enabled: true
+    image: archiver
+    priority: critical
+    volumes: [archive]
+    egress: [redpanda]
+    resources:
+      requests: { cpu: 50m, memory: 256Mi }
+      limits: { cpu: 500m, memory: 768Mi }
+
+# Scheduled jobs. Times are UTC, spread out so two heavy ones rarely overlap.
+cronJobs:
+  labeler:
+    schedule: "17 * * * *"
+    image: labeler
+    egress: [internet, redpanda, database]
+    deadlineSeconds: 3000
+    resources:
+      requests: { cpu: 50m, memory: 128Mi }
+      limits: { cpu: 500m, memory: 512Mi }
+  monitor:
+    schedule: "30 4 * * *"
+    image: monitor
+    volumes: [archiveReadOnly]
+    egress: [internet, database]
+    deadlineSeconds: 3600
+    env:
+      HOME: /tmp
+      MPLCONFIGDIR: /tmp/matplotlib
+    resources:
+      requests: { cpu: 250m, memory: 512Mi }
+      limits: { cpu: "1", memory: 2Gi }
+  purge:
+    schedule: "45 3 * * *"
+    image: purge
+    volumes: [archive]
+    egress: [internet, database]
+    deadlineSeconds: 3600
+    resources:
+      requests: { cpu: 50m, memory: 128Mi }
+      limits: { cpu: 500m, memory: 768Mi }
+  purge-snapshots:
+    schedule: "15 5 * * *"
+    image: purge-snapshots
+    checkout: true
+    egress: [internet]
+    deadlineSeconds: 7200
+    resources:
+      requests: { cpu: 100m, memory: 256Mi }
+      limits: { cpu: "1", memory: 1Gi }
+  purge-snapshots-full:
+    schedule: "15 6 * * 0"
+    image: purge-snapshots
+    secret: purge-snapshots
+    args: [--full]
+    checkout: true
+    egress: [internet]
+    deadlineSeconds: 14400
+    resources:
+      requests: { cpu: 100m, memory: 256Mi }
+      limits: { cpu: "1", memory: 1Gi }
+  retention:
+    schedule: "0 3 * * *"
+    image: retention
+    egress: [internet, database]
+    deadlineSeconds: 1800
+    resources:
+      requests: { cpu: 50m, memory: 64Mi }
+      limits: { cpu: 250m, memory: 256Mi }
+  archive-maintenance:
+    schedule: "30 2 * * *"
+    image: archiver
+    secret: archiver
+    command: [python, archiver.py]
+    args: [--cleanup, --mirror]
+    volumes: [archive]
+    egress: [internet]
+    deadlineSeconds: 3600
+    resources:
+      requests: { cpu: 50m, memory: 256Mi }
+      limits: { cpu: 500m, memory: 768Mi }
+  backup:
+    schedule: "15 2 * * *"
+    image: backup
+    egress: [internet, database]
+    deadlineSeconds: 1800
+    resources:
+      requests: { cpu: 50m, memory: 128Mi }
+      limits: { cpu: 500m, memory: 512Mi }
+  retrain-poller:
+    # Every two minutes, and a new run may start while one waits on a long training Job, so a
+    # rollback never queues behind a retrain (DEC-084). Claims are row locks, so two can't clash.
+    schedule: "*/2 * * * *"
+    image: retrain-poller
+    concurrency: Allow
+    kubeApi: true
+    trainerTemplate: true
+    egress: [database, kubeApi]
+    # A little over the trainer's own 12 hours, so the poller records the outcome.
+    deadlineSeconds: 45000
+    resources:
+      requests: { cpu: 10m, memory: 64Mi }
+      limits: { cpu: 200m, memory: 192Mi }
+
+# The Job the poller creates for each request (jobs/retrain_poller/kube.py fills in the command).
+trainer:
+  image: trainer
+  # Clone the repo and pull the golden set before training. Needs DagsHub's key in the Secret.
+  checkout: true
+  # The poller gives up at 12 hours too, and records the request as failed.
+  deadlineSeconds: 43200
+  ttlSecondsAfterFinished: 604800
+  egress: [internet, database]
+  env:
+    HOME: /tmp
+    HF_HOME: /work/hf
+    MPLCONFIGDIR: /tmp/matplotlib
+  resources:
+    requests: { cpu: "1", memory: 3Gi }
+    limits: { cpu: "2", memory: 6Gi }
+
+network:
+  # Default deny in both directions, then only the paths each component needs (section 8).
+  enabled: true
+  # Where Prometheus runs, to scrape /metrics.
+  monitoringNamespace: monitoring
+  # The internet minus every private range, the cloud metadata address, and Tailscale's range.
+  internetExcept:
+    - 10.0.0.0/8
+    - 172.16.0.0/12
+    - 192.168.0.0/16
+    - 169.254.0.0/16
+    - 100.64.0.0/10
+  # Supabase's pooler is on the internet: session 5432, transaction 6543.
+  database:
+    external: true
+    ports: [5432, 6543]
+  # The Kubernetes API, for the poller only. bootstrap_cluster.sh writes the node's address.
+  kubeApi:
+    cidr: 10.0.0.0/8
+    ports: [443, 6443]
+
+monitoring:
+  # ServiceMonitors, alert rules, and dashboards, for kube-prometheus-stack (k8s/platform).
+  enabled: true
+
+# Local only: Postgres in the cluster instead of Supabase, and a migration Job. Off in production,
+# where CD runs migrations from GitHub (DEC-078).
+devDatabase:
+  enabled: false

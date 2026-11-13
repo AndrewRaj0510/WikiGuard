@@ -106,6 +106,11 @@ class ApiSettings(BaseConfig):
     predict_max_concurrency: int = Field(default=2, gt=0)
     db_statement_timeout_ms: int = Field(default=3000, gt=0)
     db_pool_size: int = Field(default=5, gt=0)
+    # "snapshot" when the database holds a fixed, already-scored dataset (scripts/load_demo.py)
+    # instead of the live pipeline's last 3 days (DEC-091). Lists drop their time window and the
+    # health summary counts the whole dataset, so a demo with nothing streaming isn't shown as
+    # empty or broken, and the frontend can say plainly that it isn't live.
+    data_mode: Literal["live", "snapshot"] = "live"
     max_body_bytes: int = Field(default=128 * 1024, gt=0)
     # The commit this build came from, shown by /health so a deploy can be told from the one before
     # it. Render sets RENDER_GIT_COMMIT itself. Blank locally. Hex only, so nothing else can be
@@ -147,6 +152,9 @@ class RetrainSettings(BaseConfig):
     # What the retrain-request poller runs, with the request's kind and id added as arguments.
     # Blank means requests are recorded as failed.
     trainer_command: str | None = None
+    # In the cluster: the Job template the Helm chart mounts. Set, and each request runs
+    # TRAINER_COMMAND as a Kubernetes Job of its own instead of a process next to the poller.
+    trainer_job_template: str | None = None
     # The CPU models only: BERT and RoBERTa need a GPU notebook run by hand (DEC-022).
     retrain_models: str = "mlp,bilstm,distilbert"
     # The whole run stops starting new models past this, and the poller kills it at 12 hours.
@@ -197,13 +205,30 @@ class WorkerSettings(BaseConfig):
 
 
 class ArchiveSettings(BaseConfig):
+    # Where the working copy lives (DEC-083): local, a folder mirrored nightly to the bucket, or s3,
+    # the bucket itself. Oracle's 50,000 free requests a month is why local is the default.
+    archive_store: Literal["local", "s3"] = "local"
+    # The folder, or with ARCHIVE_STORE=s3, the prefix inside the bucket.
     archive_path: str = "data/archive"
+    # Where the nightly mirror goes inside the bucket.
+    archive_mirror_prefix: str = "archive"
     # Edits under 48 hours old must never be deleted, so the window can't go below 3 days.
     archive_retention_days: int = Field(default=30, ge=3)
+    # Oracle Object Storage's S3-compatible API, for example
+    # https://NAMESPACE.compat.objectstorage.REGION.oraclecloud.com, and its region name.
     archive_s3_endpoint: str | None = None
+    archive_s3_region: str | None = None
     archive_s3_bucket: str | None = None
     archive_s3_access_key: SecretStr | None = None
     archive_s3_secret_key: SecretStr | None = None
+
+
+class BackupSettings(BaseConfig):
+    # The public half of the backup key pair (`python jobs/backup/backup.py keygen`). The cluster
+    # can encrypt with it but not decrypt, so the private half lives only with the owner.
+    backup_public_key: str | None = None
+    # A folder, or with ARCHIVE_S3_BUCKET set, the prefix inside the same bucket.
+    backup_path: str = "data/backups"
 
 
 class AlertSettings(BaseConfig):

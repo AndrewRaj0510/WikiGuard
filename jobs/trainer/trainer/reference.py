@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from wikiguard_core.archive import write_reference
+from wikiguard_core.archive import Root, open_archive, write_reference
 from wikiguard_core.config import ArchiveSettings, load_settings
 from wikiguard_core.inference import ServedModel
 from wikiguard_core.snapshot import TRAIN, VALIDATION, read_manifest, read_snapshot
@@ -34,7 +34,7 @@ def sample(
 
 
 def save_for_model(
-    archive_root: Path,
+    archive_root: Root,
     version: str,
     model_name: str,
     served_folder: Path,
@@ -66,7 +66,7 @@ def main() -> int:
     settings = load_settings(ArchiveSettings)
     config = json.loads((args.model_folder / "config.json").read_text("utf-8"))
     folder = save_for_model(
-        Path(settings.archive_path),
+        open_archive(settings),
         args.version,
         config["kind"],
         args.model_folder,

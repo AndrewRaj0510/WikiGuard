@@ -5,17 +5,22 @@ import { relativeTime } from "@/lib/format";
 import { useNow } from "@/lib/use-now";
 import { cn } from "@/lib/utils";
 
-/** What the data on screen is: live, paused, reconnecting, or served from the API's stale cache. */
+/**
+ * What the data on screen is: live, paused, reconnecting, served from the API's stale cache, or
+ * the demo's fixed snapshot, which is never called live (DEC-091).
+ */
 export function LiveStatus({
   paused,
   error,
   updatedAt,
   serverStale,
+  snapshot = false,
 }: {
   paused: boolean;
   error: ApiError | undefined;
   updatedAt: number | undefined;
   serverStale?: boolean;
+  snapshot?: boolean;
 }) {
   const now = useNow();
   const [label, tone] = paused
@@ -24,7 +29,9 @@ export function LiveStatus({
       ? ["Reconnecting", "warn"]
       : serverStale
         ? ["Showing cached data", "warn"]
-        : ["Live", "live"];
+        : snapshot
+          ? ["Snapshot, not live", "idle"]
+          : ["Live", "live"];
   const age = updatedAt ? relativeTime(new Date(updatedAt).toISOString(), now) : "";
   return (
     <p

@@ -28,6 +28,7 @@ from typing import Any
 import numpy as np
 import psycopg
 from wikiguard_core.alerts import Alerter
+from wikiguard_core.archive import open_archive
 from wikiguard_core.artifacts import verify_artifact
 from wikiguard_core.chain import CANDIDATE_ALIAS, ModelCache, smoke_check
 from wikiguard_core.config import (
@@ -283,7 +284,7 @@ def build(settings: Any, connection: psycopg.Connection[Any]) -> Lifecycle:
     paths = Paths(
         workdir=Path("data/retrain"),
         snapshots=Path(settings.snapshot_repo_path) / "snapshots",
-        archive=Path(settings.archive_path),
+        archive=open_archive(settings),
         golden=Path(settings.snapshot_repo_path) / "snapshots/golden-set-v1/golden.json",
         images=Path("docs/images"),
         cache=Path(f"{settings.model_cache_dir}-trainer"),

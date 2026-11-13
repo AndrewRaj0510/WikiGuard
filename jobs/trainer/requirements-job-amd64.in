@@ -1,0 +1,23 @@
+# lock: --python-platform x86_64-manylinux_2_28 --index-strategy unsafe-best-match
+# The retraining Job's packages (jobs/trainer/Dockerfile) for amd64. requirements-job-arm64.in
+# is the same list for the other CPU type: the cluster is arm64, and kind on the laptop is amd64.
+# PyTorch's CPU wheels have a different file for each, so each has its own lock. Keep them in
+# step: tests/test_pipeline_rules.py checks that both ask for the same packages.
+# BERT and RoBERTa never retrain here (DEC-022), so this is the CPU build of PyTorch.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.14.1+cpu
+transformers==5.22.1
+mlflow-skinny==3.5.1
+onnx==1.23.2
+onnxscript==0.7.2
+onnxruntime==1.31.1
+safetensors==0.8.0
+tokenizers==0.23.3
+numpy==2.4.6
+pyarrow==26.0.1
+matplotlib==3.11.2
+psycopg[binary]==3.3.8
+httpx==0.28.1
+pydantic-settings==2.16.2
+# Retention after a retrain removes snapshots no live model uses, with DVC (trainer.storage).
+dvc[s3]==3.67.1

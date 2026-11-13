@@ -53,9 +53,9 @@ jobs:
           match() { if echo "$files" | grep -qE "$1"; then echo true; else echo false; fi; }
           shared='^\.github/|^requirements|^pyproject\.toml$|^docker-compose|^\.dockerignore$'
           {
-            echo "python=$(match "$shared|^(packages|services|jobs|scripts|tests|snapshots)/")"
-            echo "frontend=$(match "$shared|^frontend/|^services/api/|^scripts/export_openapi\.py$")"
-            echo "images=$(match "$shared|^(packages|services|jobs)/|^tests/(e2e|fixtures)/|^scripts/(compose_e2e|make_tiny_runs)\.py$")"
+            echo "python=$(match "$shared|^(packages|services|jobs|scripts|tests|snapshots|k8s)/")"
+            echo "frontend=$(match "$shared|^frontend/|^edge/|^services/api/|^scripts/export_openapi\.py$")"
+            echo "images=$(match "$shared|^(packages|services|jobs)/|^tests/(e2e|fixtures)/|^scripts/(compose_e2e|make_tiny_runs|docker_space)\.py$")"
           } >> "$GITHUB_OUTPUT"
 
   lint:
@@ -71,6 +71,8 @@ jobs:
         run: mypy packages/wikiguard_core/wikiguard_core
       - name: Every lock file is complete and matches its .in file
         run: python scripts/lock_requirements.py --check
+      - name: The Grafana dashboards match the script that writes them
+        run: python scripts/build_dashboards.py --check
 
   # The whole Python suite on real Postgres and Redpanda: unit tests, migrations up and down, RLS
   # on every table, each role's grants, the Explain injection set with a mocked LLM, and the
@@ -90,6 +92,17 @@ jobs:
       - uses: ./.github/actions/python-env
       - name: Start Postgres and Redpanda, the same images Compose uses locally
         run: docker compose up -d --wait postgres redpanda
+      # The chart's tests render it with Helm (tests/test_k8s_chart.py).
+      - name: Download Helm and verify its checksum
+        env:
+          HELM_VERSION: v4.3.1
+          HELM_SHA256: 0403a88ae20913d11b10a2467b50087721fea7581736da6b9d3992f5357fe54b
+        run: |
+          archive="helm-${HELM_VERSION}-linux-amd64.tar.gz"
+          curl -sSfL -o "$archive" "https://get.helm.sh/${archive}"
+          echo "${HELM_SHA256}  ${archive}" | sha256sum --check
+          tar -xzf "$archive" linux-amd64/helm
+          sudo install -m 0755 linux-amd64/helm /usr/local/bin/helm
       - run: pytest --cov --cov-report=json:coverage.json --cov-report=term
       - name: Coverage gates (80% shared package, 70% each service and job)
         run: python scripts/check_coverage.py coverage.json
@@ -166,6 +179,8 @@ jobs:
           - { name: purge-snapshots, dockerfile: jobs/purge/Dockerfile.snapshots }
           - { name: retention, dockerfile: jobs/retention/Dockerfile }
           - { name: retrain-poller, dockerfile: jobs/retrain_poller/Dockerfile }
+          - { name: trainer, dockerfile: jobs/trainer/Dockerfile }
+          - { name: backup, dockerfile: jobs/backup/Dockerfile }
     env:
       TRIVY_VERSION: 0.76.2
       TRIVY_SHA256: bc0fc726e017b8927a62b2d3531d7a84ee01769daf5c99ed866dced54089fdbf
@@ -187,6 +202,19 @@ jobs:
           cache-to: type=gha,scope=${{ matrix.name }},mode=max
       - name: The image runs as a user that isn't root
         run: test "$(docker run --rm --entrypoint id "$IMAGE" -u)" != "0"
+      # Each module the image runs, imported with only what the image installed. The tests run in
+      # a fuller environment, so a package missing from one image's lock passes them (F-144).
+      - name: Every module the image runs imports from the image alone
+        run: |
+          docker run --rm --entrypoint python "$IMAGE" -c '
+          import importlib, importlib.util, pathlib, sys
+          sys.path.insert(0, ".")
+          names = sorted(p.stem for p in pathlib.Path(".").glob("*.py"))
+          names += [m for m in ("trainer.lifecycle", "wikiguard_api.main")
+                    if importlib.util.find_spec(m.split(".")[0])]
+          for name in names:
+              importlib.import_module(name)
+          print("imported:", " ".join(names))'
       # Trivy is downloaded as a release file and checked against a pinned checksum, the same way
       # as gitleaks below, so no third-party action runs in this job.
       - name: Download Trivy and verify its checksum
@@ -233,6 +261,10 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
+      # The Cloudflare Worker (the single site address). Node's own runner, no packages.
+      - name: The edge Worker's routing and header rules
+        run: node --test edge/worker.test.mjs
+        working-directory: .
       - run: npm run build
       - name: No secrets in the client bundle, and each page within its JavaScript budget
         run: npm run check:bundle

@@ -34,15 +34,29 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       prefix: ${{ steps.names.outputs.prefix }}
+      images_only: ${{ steps.changed.outputs.images_only }}
     steps:
       - id: names
         # Registry names must be lowercase, and the account name isn't.
         run: echo "prefix=${REGISTRY}/${GITHUB_REPOSITORY_OWNER,,}/wikiguard" >> "$GITHUB_OUTPUT"
+      # A merged image pull request (cluster-images, below) changes only the digest file. It needs
+      # no new build, and building it would open another such pull request, forever.
+      - id: changed
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          files="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${SHA}" --jq '.files[].filename')"
+          if [ "$files" = "k8s/charts/wikiguard/images.yaml" ]; then
+            echo "images_only=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "images_only=false" >> "$GITHUB_OUTPUT"
+          fi
 
   # Each image, built on a runner of its own CPU type. Emulating arm64 on amd64 works but is
   # several times slower. The cluster is arm64 and Render is amd64, so both are needed.
   build:
     needs: gate
+    if: needs.gate.outputs.images_only != 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -58,6 +72,8 @@ jobs:
           - { name: purge-snapshots, dockerfile: jobs/purge/Dockerfile.snapshots }
           - { name: retention, dockerfile: jobs/retention/Dockerfile }
           - { name: retrain-poller, dockerfile: jobs/retrain_poller/Dockerfile }
+          - { name: trainer, dockerfile: jobs/trainer/Dockerfile }
+          - { name: backup, dockerfile: jobs/backup/Dockerfile }
         arch:
           - { name: amd64, runner: ubuntu-24.04 }
           - { name: arm64, runner: ubuntu-24.04-arm }
@@ -124,6 +140,8 @@ jobs:
           - purge-snapshots
           - retention
           - retrain-poller
+          - trainer
+          - backup
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -166,6 +184,63 @@ jobs:
             --tag "${IMAGE}:sha-${SHA}" --tag "${IMAGE}:main" \
             "${IMAGE}@$(cat digests/amd64)" "${IMAGE}@$(cat digests/arm64)"
           docker buildx imagetools inspect "${IMAGE}:sha-${SHA}"
+
+  # The cluster's half of delivery (DEC-084). Argo CD deploys whatever main says, and images.yaml
+  # says which digest of each image to run. This job proposes the new digests as a pull request,
+  # so every change to the cluster is a reviewed commit, and nothing outside can reach the
+  # cluster. Off until the repository variable CLUSTER_ENABLED is "true", once the VM exists.
+  # The repo setting "Allow GitHub Actions to create pull requests" must be on.
+  cluster-images:
+    needs: [gate, publish]
+    if: vars.CLUSTER_ENABLED == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pull-requests: write
+      packages: read
+    env:
+      PREFIX: ${{ needs.gate.outputs.prefix }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Write each image's digest, as published for this commit
+        run: |
+          {
+            echo "# Written by CD for commit ${SHA}. Each image's multi-arch digest (DEC-084)."
+            echo "digests:"
+            # Every image the chart runs. Migrations run from CD itself, not in the cluster.
+            for name in ingestor scorer archiver labeler monitor purge purge-snapshots \
+              retention retrain-poller trainer backup; do
+              digest="$(docker buildx imagetools inspect "${PREFIX}-${name}:sha-${SHA}" \
+                --format '{{json .Manifest.Digest}}' | tr -d '"')"
+              echo "  ${name}: ${digest}"
+            done
+          } > k8s/charts/wikiguard/images.yaml
+          cat k8s/charts/wikiguard/images.yaml
+      - name: Propose them as a pull request
+        run: |
+          branch="cluster/images-${SHA:0:12}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git add k8s/charts/wikiguard/images.yaml
+          git diff --cached --quiet && { echo "No change"; exit 0; }
+          git commit -m "Cluster images for ${SHA:0:12}"
+          # The token is passed as a header for this one push, and never written to .git/config.
+          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" \
+            push origin "$branch"
+          gh pr create --base main --head "$branch" --title "Cluster images for ${SHA:0:12}" \
+            --body "Digests of the images CD scanned and published for ${SHA}. Merging deploys them to the cluster through Argo CD (DEC-084)."
 
   # ---------------------------------------------------------------------------------------
   # Deploys. Off until the repository variable DEPLOY_ENABLED is "true", which Phase 7 sets

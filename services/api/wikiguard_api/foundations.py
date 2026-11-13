@@ -13,6 +13,7 @@ import psycopg
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool, PoolClosed, PoolTimeout
 from wikiguard_core.config import (
+    AlertSettings,
     ApiSettings,
     CommonSettings,
     DatabaseSettings,
@@ -32,6 +33,7 @@ class Settings(
     ApiSettings,
     FeatureFlagSettings,
     GateSettings,
+    AlertSettings,
 ):
     pass
 

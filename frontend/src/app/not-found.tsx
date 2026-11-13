@@ -17,8 +17,8 @@ export default function NotFound() {
         No page here
       </h1>
       <p className="mt-3 text-[15px] leading-relaxed text-muted-foreground">
-        The address may be mistyped, or the page has moved. Edits are kept for three days, so an
-        older edit’s page is gone on purpose.
+        The address may be mistyped, or the page has moved. An edit WikiGuard no longer keeps
+        has no page, on purpose.
       </p>
       <div className="mt-6 flex gap-3">
         <Link href="/" className={buttonVariants()}>

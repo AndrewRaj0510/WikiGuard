@@ -307,6 +307,14 @@
       "EditPage": {
         "additionalProperties": false,
         "properties": {
+          "data_mode": {
+            "enum": [
+              "live",
+              "snapshot"
+            ],
+            "title": "Data Mode",
+            "type": "string"
+          },
           "items": {
             "items": {
               "$ref": "#/components/schemas/EditSummary"
@@ -333,7 +341,8 @@
         "required": [
           "items",
           "next_cursor",
-          "stale"
+          "stale",
+          "data_mode"
         ],
         "title": "EditPage",
         "type": "object"
@@ -634,6 +643,38 @@
             "title": "Chain",
             "type": "array"
           },
+          "data_from": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data From"
+          },
+          "data_mode": {
+            "enum": [
+              "live",
+              "snapshot"
+            ],
+            "title": "Data Mode",
+            "type": "string"
+          },
+          "data_to": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data To"
+          },
           "drift_reports": {
             "items": {
               "additionalProperties": true,
@@ -711,6 +752,9 @@
         },
         "required": [
           "stale",
+          "data_mode",
+          "data_from",
+          "data_to",
           "scored_last_24h",
           "fallback_rate_24h",
           "load_shed_rate_24h",

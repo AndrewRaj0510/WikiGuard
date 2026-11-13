@@ -289,7 +289,7 @@ def test_the_workers_client_ip_is_believed_only_with_its_secret(stack: Stack) ->
         return browser.client.post(
             "/v1/auth/guest",
             json={"tab_id": "not valid!"},
-            headers={"x-edge-secret": "edge-test-secret", "cf-connecting-ip": ip},
+            headers={"x-edge-secret": "edge-test-secret", "x-wikiguard-client-ip": ip},
         ).status_code
 
     assert sign_in("203.0.113.1") == 422
@@ -308,6 +308,7 @@ def test_spoofed_forwarding_headers_dont_escape_the_limit(stack: Stack) -> None:
                 headers={
                     "x-forwarded-for": f"198.51.100.{number}",
                     "x-real-ip": f"198.51.100.{number}",
+                    "x-wikiguard-client-ip": f"198.51.100.{number}",
                     "cf-connecting-ip": f"198.51.100.{number}",
                     "forwarded": f"for=198.51.100.{number}",
                 },
@@ -677,6 +678,57 @@ def test_the_queue_only_goes_back_three_days(guest: Browser, db: psycopg.Connect
     seed_edit(db, 1, edited_at=datetime.now(UTC) - timedelta(days=4))
     seed_edit(db, 2)
     assert [item["rev_id"] for item in guest.get("/v1/queue").json()["items"]] == [2]
+
+
+def test_live_lists_and_health_say_they_are_live(
+    guest: Browser, db: psycopg.Connection[Any]
+) -> None:
+    seed_edit(db, 1)
+    assert guest.get("/v1/queue").json()["data_mode"] == "live"
+    assert guest.get("/v1/feed").json()["data_mode"] == "live"
+    health = guest.get("/v1/health/summary").json()
+    assert (health["data_mode"], health["data_from"], health["data_to"]) == ("live", None, None)
+
+
+SNAPSHOT = pytest.mark.parametrize("stack", [{"data_mode": "snapshot"}], indirect=True)
+
+
+@SNAPSHOT
+def test_a_snapshot_shows_every_edit_however_old(
+    guest: Browser, db: psycopg.Connection[Any]
+) -> None:
+    """DEC-091: the demo's dataset is weeks old, and has no time window."""
+    old = datetime(2026, 10, 27, 12, tzinfo=UTC)
+    seed_edit(db, 1, score=0.9, edited_at=old)
+    seed_edit(db, 2, score=0.4, edited_at=old + timedelta(days=5))
+    seed_edit(db, 3, score=None, edited_at=old + timedelta(days=6))
+    queue = guest.get("/v1/queue").json()
+    assert [item["rev_id"] for item in queue["items"]] == [1, 2]
+    assert queue["data_mode"] == "snapshot"
+    feed = guest.get("/v1/feed", params={"limit": 2}).json()
+    rest = guest.get("/v1/feed", params={"limit": 2, "cursor": feed["next_cursor"]}).json()
+    assert [item["rev_id"] for item in feed["items"] + rest["items"]] == [3, 2, 1]
+    assert feed["data_mode"] == "snapshot"
+
+
+@SNAPSHOT
+def test_a_snapshots_health_counts_the_whole_dataset(
+    guest: Browser, db: psycopg.Connection[Any]
+) -> None:
+    first = datetime(2026, 10, 27, 12, tzinfo=UTC)
+    last = first + timedelta(days=6)
+    seed_edit(db, 1, edited_at=first)
+    seed_edit(db, 2, edited_at=last)
+    seed_edit(db, 3, score=None, edited_at=first + timedelta(days=1))
+    # Scored long ago, so a live summary would count none of it.
+    db.execute("UPDATE scores SET scored_at = %s", (first,))
+    db.commit()
+    body = guest.get("/v1/health/summary").json()
+    assert body["data_mode"] == "snapshot"
+    assert body["scored_last_24h"] == 2
+    assert body["unscored_edits"] == 1
+    assert datetime.fromisoformat(body["data_from"]) == first
+    assert datetime.fromisoformat(body["data_to"]) == last
 
 
 def test_unscored_edits_arent_in_the_queue_but_are_in_the_feed(

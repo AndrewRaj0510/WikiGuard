@@ -1,0 +1,5 @@
+{
+  "type": "module",
+  "private": true,
+  "description": "The Cloudflare Worker: WikiGuard's single site address. Tests: node --test edge/worker.test.mjs"
+}

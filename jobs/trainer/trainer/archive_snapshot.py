@@ -10,12 +10,11 @@ archive gives the same snapshot. Rules on top of build_snapshot's own:
 """
 
 from datetime import datetime, timedelta
-from pathlib import Path
 from typing import Any
 
 import pyarrow as pa
 import pyarrow.compute as pc
-from wikiguard_core.archive import EDITS, LABELS, read_table, sample_mask
+from wikiguard_core.archive import EDITS, LABELS, Root, read_table, sample_mask
 from wikiguard_core.schemas import EditEvent
 from wikiguard_core.snapshot import Candidate, Snapshot, build_snapshot
 
@@ -34,7 +33,7 @@ def _edit(row: dict[str, Any]) -> EditEvent:
 
 
 def archive_candidates(
-    root: Path, as_of: datetime, target_rows: int, exclude: set[int]
+    root: Root, as_of: datetime, target_rows: int, exclude: set[int]
 ) -> tuple[list[Candidate], int]:
     """The candidates, and how many golden-set revisions were held out."""
     since = (as_of - timedelta(days=ARCHIVE_DAYS)).date()
@@ -63,7 +62,7 @@ def archive_candidates(
 
 
 def build_from_archive(
-    root: Path, as_of: datetime, target_rows: int, exclude: set[int]
+    root: Root, as_of: datetime, target_rows: int, exclude: set[int]
 ) -> Snapshot:
     candidates, held_out = archive_candidates(root, as_of, target_rows, exclude)
     snapshot = build_snapshot(candidates, as_of, SOURCE)

@@ -21,6 +21,7 @@ import shlex
 import subprocess
 import sys
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 import psycopg
@@ -65,7 +66,7 @@ def command_arguments(command: str, request: dict[str, Any]) -> list[str]:
 
 
 def command_launcher(command: str | None) -> Launcher:
-    """Runs the trainer as a command. Phase 7 swaps this for creating a Kubernetes Job."""
+    """Runs the trainer as a command on this machine: Compose, and the laptop."""
 
     def launch(request: dict[str, Any]) -> None:
         if not command:
@@ -82,7 +83,25 @@ def not_built_launcher(request: dict[str, Any]) -> None:
     raise NotBuiltYet(f"no launcher for {request['kind']}: TRAINER_COMMAND isn't set")
 
 
-def launchers_for(command: str | None) -> dict[str, Launcher]:
+def job_launcher(command: str | None, jobs: Any) -> Launcher:
+    """Runs the trainer as a Kubernetes Job from the chart's template (kube.py). Same arguments."""
+
+    def launch(request: dict[str, Any]) -> None:
+        if not command:
+            raise NotBuiltYet("TRAINER_COMMAND isn't set")
+        name = jobs.run(request, command_arguments(command, request))
+        logger.info("Request %s: Job %s finished", request["id"], name)
+
+    return launch
+
+
+def launchers_for(command: str | None, job_template: str | None = None) -> dict[str, Launcher]:
+    """In the cluster, TRAINER_JOB_TEMPLATE is set and every kind runs as its own Job."""
+    if job_template:
+        from kube import KubernetesJobs
+
+        jobs = KubernetesJobs.in_cluster(Path(job_template), TRAINER_TIMEOUT_SECONDS)
+        return dict.fromkeys(KINDS, job_launcher(command, jobs))
     return dict.fromkeys(KINDS, command_launcher(command))
 
 
@@ -234,7 +253,7 @@ def main() -> int:
     except ConfigError as error:
         logger.error("%s", error)
         return 2
-    launchers = launchers_for(settings.trainer_command)
+    launchers = launchers_for(settings.trainer_command, settings.trainer_job_template)
     with psycopg.connect(
         settings.database_url.get_secret_value(), prepare_threshold=None, connect_timeout=10
     ) as connection:

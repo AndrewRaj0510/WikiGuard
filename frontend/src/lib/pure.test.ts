@@ -122,7 +122,7 @@ function row(rev_id: number): EditSummary {
 }
 
 function page(ids: number[]): EditPage {
-  return { items: ids.map(row), next_cursor: null, stale: false };
+  return { items: ids.map(row), next_cursor: null, stale: false, data_mode: "live" };
 }
 
 describe("lists", () => {

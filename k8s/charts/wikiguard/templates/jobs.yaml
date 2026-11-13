@@ -1,0 +1,160 @@
+{{- /*
+Scheduled jobs, and the trainer Job template the poller fills in. Batch pods have no probes: they
+run to completion, and activeDeadlineSeconds stops one that hangs. A missed or failed run alerts
+through kube-state-metrics (templates/monitoring.yaml).
+*/}}
+{{- range $name, $job := .Values.cronJobs }}
+{{- $secret := $job.secret | default $name }}
+{{- $image := include "wikiguard.image" (list $ $job.image) }}
+{{- $volumes := $job.volumes | default list }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: wikiguard-{{ $name }}
+  labels:
+    {{- include "wikiguard.labels" $ | nindent 4 }}
+    {{- include "wikiguard.selector" $name | nindent 4 }}
+spec:
+  schedule: {{ $job.schedule | quote }}
+  timeZone: Etc/UTC
+  concurrencyPolicy: {{ $job.concurrency | default "Forbid" }}
+  # A run that couldn't start within 10 minutes is skipped, not piled up after an outage.
+  startingDeadlineSeconds: 600
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  {{- if $job.suspend }}
+  suspend: true
+  {{- end }}
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: {{ $job.deadlineSeconds | default 3600 }}
+      ttlSecondsAfterFinished: 86400
+      template:
+        metadata:
+          labels:
+            {{- include "wikiguard.selector" $name | nindent 12 }}
+            {{- range $job.egress }}
+            wikiguard.dev/{{ . }}: "true"
+            {{- end }}
+        spec:
+          serviceAccountName: wikiguard-{{ $name }}
+          automountServiceAccountToken: {{ $job.kubeApi | default false }}
+          priorityClassName: wikiguard-batch
+          restartPolicy: Never
+          securityContext:
+            {{- include "wikiguard.podSecurity" dict | nindent 12 }}
+          {{- if $job.checkout }}
+          initContainers:
+            {{- include "wikiguard.checkout" (dict "root" $ "image" $image "secret" $secret "path" "/repo" "mount" "/repo" "pull" "") | nindent 12 }}
+          {{- end }}
+          containers:
+            - name: {{ $name }}
+              image: {{ $image }}
+              imagePullPolicy: {{ $.Values.image.pullPolicy }}
+              securityContext:
+                {{- include "wikiguard.containerSecurity" $ | nindent 16 }}
+              {{- with $job.command }}
+              command:
+                {{- toYaml . | nindent 16 }}
+              {{- end }}
+              {{- with $job.args }}
+              args:
+                {{- toYaml . | nindent 16 }}
+              {{- end }}
+              envFrom:
+                {{- include "wikiguard.envFrom" $secret | nindent 16 }}
+              {{- if or $job.env $job.checkout }}
+              env:
+                {{- include "wikiguard.env" ($job.env | default dict) | nindent 16 }}
+                {{- if $job.checkout }}
+                - name: SNAPSHOT_REPO_PATH
+                  value: /repo
+                - name: HOME
+                  value: /tmp
+                {{- end }}
+              {{- end }}
+              resources:
+                {{- toYaml $job.resources | nindent 16 }}
+              volumeMounts:
+                {{- include "wikiguard.volumeMounts" $volumes | nindent 16 }}
+                {{- if $job.checkout }}
+                - name: work
+                  mountPath: /repo
+                {{- end }}
+                {{- if $job.trainerTemplate }}
+                - name: trainer-template
+                  mountPath: /etc/wikiguard
+                  readOnly: true
+                {{- end }}
+          volumes:
+            {{- include "wikiguard.volumes" $volumes | nindent 12 }}
+            {{- if $job.checkout }}
+            # Its own clone, made fresh each run: the purge must never work in a checkout that
+            # holds data the models trained on (F-093).
+            - name: work
+              emptyDir:
+                sizeLimit: 4Gi
+            {{- end }}
+            {{- if $job.trainerTemplate }}
+            - name: trainer-template
+              configMap:
+                name: wikiguard-trainer-job
+            {{- end }}
+{{- end }}
+---
+{{- /*
+The trainer Job, as JSON the poller reads (jobs/retrain_poller/kube.py). The poller adds a name,
+two labels, and the command, and changes nothing else, so everything that matters for safety is
+here, where it's reviewed: the image, limits, priority, deadline, and security settings.
+*/}}
+{{- $trainerImage := include "wikiguard.image" (list . .Values.trainer.image) }}
+{{- $trainerJob := dict
+  "apiVersion" "batch/v1"
+  "kind" "Job"
+  "metadata" (dict "labels" (dict "app.kubernetes.io/name" "trainer" "app.kubernetes.io/part-of" "wikiguard"))
+  "spec" (dict
+    "backoffLimit" 0
+    "activeDeadlineSeconds" .Values.trainer.deadlineSeconds
+    "ttlSecondsAfterFinished" .Values.trainer.ttlSecondsAfterFinished
+    "template" (dict
+      "metadata" (dict "labels" (dict "app.kubernetes.io/name" "trainer" "app.kubernetes.io/part-of" "wikiguard"))
+      "spec" (dict
+        "serviceAccountName" "wikiguard-trainer"
+        "automountServiceAccountToken" false
+        "priorityClassName" "wikiguard-training"
+        "restartPolicy" "Never"
+        "securityContext" (include "wikiguard.podSecurity" dict | fromYaml)
+        "containers" (list (dict
+          "name" "trainer"
+          "image" $trainerImage
+          "imagePullPolicy" .Values.image.pullPolicy
+          "securityContext" (include "wikiguard.containerSecurity" . | fromYaml)
+          "envFrom" (include "wikiguard.envFrom" "trainer" | fromYamlArray)
+          "env" (include "wikiguard.env" .Values.trainer.env | fromYamlArray)
+          "resources" .Values.trainer.resources
+          "volumeMounts" (concat (include "wikiguard.volumeMounts" (list "archive") | fromYamlArray) (list (dict "name" "work" "mountPath" "/work")))
+        ))
+        "volumes" (concat (include "wikiguard.volumes" (list "archive") | fromYamlArray) (list (dict "name" "work" "persistentVolumeClaim" (dict "claimName" "wikiguard-trainer-cache"))))
+      )
+    )
+  )
+}}
+{{- /* The checkout needs DagsHub's key, so kind, which has none, can turn it off. */}}
+{{- if .Values.trainer.checkout }}
+{{- $_ := set $trainerJob.spec.template.spec "initContainers" (include "wikiguard.checkout" (dict "root" . "image" $trainerImage "secret" "trainer" "path" "/work/repo" "mount" "/work" "pull" "snapshots/golden-set-v1.dvc") | fromYamlArray) }}
+{{- end }}
+{{- /* Each egress label the trainer needs, for the NetworkPolicies. */}}
+{{- range .Values.trainer.egress }}
+{{- $_ := set $trainerJob.spec.template.metadata.labels (printf "wikiguard.dev/%s" .) "true" }}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wikiguard-trainer-job
+  labels:
+    {{- include "wikiguard.labels" . | nindent 4 }}
+data:
+  trainer-job.json: |
+    {{- toPrettyJson $trainerJob | nindent 4 }}

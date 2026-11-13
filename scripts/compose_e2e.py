@@ -24,6 +24,9 @@ from typing import Any
 import httpx
 from argon2 import PasswordHasher
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import docker_space  # noqa: E402 - a sibling script
+
 PROJECT = "wikiguard-e2e"
 API_PORT = 8765
 TAB = "tab-e2e-aaaaaaaa"
@@ -97,8 +100,11 @@ class Stack:
             raise RuntimeError(f"docker compose {args[0]} failed")
         return done.stdout
 
-    def clean(self) -> None:
+    def clean(self, remove_images: bool = False) -> None:
         # Profiles have to be named, or their containers and volumes are left behind.
+        # `--rmi local` deletes only the images this stack built (they have no `image:` name), so
+        # the pulled Postgres and Redpanda images stay for the next run.
+        rmi = ["--rmi", "local"] if remove_images else []
         self.run(
             "--profile",
             "render",
@@ -107,8 +113,11 @@ class Stack:
             "down",
             "-v",
             "--remove-orphans",
+            *rmi,
             check=False,
         )
+        if remove_images:
+            docker_space.report("", [], docker_space.prune_build_cache())
 
     def psql(self, query: str) -> str:
         return self.run(
@@ -365,6 +374,11 @@ def measure_render_limits(stack: Stack, user_password: str) -> dict[str, Any]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--keep", action="store_true", help="leave the stack running")
+    parser.add_argument(
+        "--keep-images",
+        action="store_true",
+        help="keep the built images and the build cache afterwards (faster reruns, more disk)",
+    )
     parser.add_argument("--out", type=Path, default=Path("data/compose_e2e.json"))
     parser.add_argument("--runs", type=Path, help="the models to serve, in place of data/runs")
     parser.add_argument(
@@ -390,7 +404,7 @@ def main() -> int:
         return 1
     finally:
         if not args.keep:
-            stack.clean()
+            stack.clean(remove_images=not args.keep_images)
         env_file.unlink(missing_ok=True)
     # data/ is git-ignored, so a fresh checkout, such as CI's, doesn't have it yet.
     args.out.parent.mkdir(parents=True, exist_ok=True)
