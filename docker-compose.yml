@@ -34,7 +34,7 @@ services:
       retries: 20
 
   redpanda:
-    image: redpandadata/redpanda:v26.2.6@sha256:8b1076e0d61bfceb66594dc01536427ce0b529f8ead35fdab9763ab6085891ce
+    image: redpandadata/redpanda:v26.2.7@sha256:43545ee03966431f5451e0b3c1e651b39fbe3eb383360220311021f50133b649
     # Two listeners: containers use redpanda:9092, and code on the laptop uses 127.0.0.1:19092.
     # Not localhost, which tried IPv6 first on the laptop and logged a connection failure.
     command:
