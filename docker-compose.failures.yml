@@ -1,0 +1,33 @@
+# Added on top of docker-compose.yml and docker-compose.e2e.yml by scripts/inject_failures.py
+# (PLAN.md, Phase 8, failure injection). Each FI_ variable switches one failure on; unset, the
+# stack is the end-to-end one. The script sets them in its own environment and recreates a service.
+services:
+  # The mock's /control and /stats, for the script only, and on the loopback address only.
+  mock-wikimedia:
+    ports:
+      - "127.0.0.1:18080:8080"
+
+  api:
+    environment:
+      EXPLAIN_ENABLED: ${FI_EXPLAIN_ENABLED:-false}
+      EXPLAIN_DAILY_CALL_CAP: ${FI_EXPLAIN_CAP:-50}
+      LLM_MODEL: injection-test-model
+      LLM_BACKUP_MODEL: injection-test-backup
+      # Not keys. The two LLM hosts resolve to the container itself below, where nothing listens,
+      # so an Explain call fails at connect and nothing leaves the laptop (tests never call an LLM).
+      OPENAI_API_KEY: injection-test-not-a-key
+      GEMINI_API_KEY: injection-test-not-a-key
+      MODEL_SOURCE: ${FI_MODEL_SOURCE:-local}
+      # Port 9 on the container itself: nothing listens, so the registry is "down".
+      MLFLOW_TRACKING_URI: http://127.0.0.1:9
+      PREDICT_TIMEOUT_MS: ${FI_API_TIMEOUT_MS:-5000}
+    extra_hosts:
+      - "api.openai.com:127.0.0.1"
+      - "generativelanguage.googleapis.com:127.0.0.1"
+
+  scorer:
+    environment:
+      MODEL_SOURCE: ${FI_MODEL_SOURCE:-local}
+      MLFLOW_TRACKING_URI: http://127.0.0.1:9
+      PREDICT_TIMEOUT_MS: ${FI_SCORER_TIMEOUT_MS:-300}
+      MODEL_POLL_SECONDS: ${FI_SCORER_POLL_SECONDS:-300}

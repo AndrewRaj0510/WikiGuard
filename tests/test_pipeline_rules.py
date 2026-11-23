@@ -22,6 +22,8 @@ DOCKERFILES = sorted(
     for path in ROOT.glob(pattern)
 )
 COMPOSE_FILES = sorted(ROOT.glob("docker-compose*.yml"))
+# Overlays that only change services defined elsewhere, so they name no image of their own.
+OVERLAYS_WITHOUT_IMAGES = {"docker-compose.failures.yml"}
 # A measuring tool run by hand on the laptop. It's never published or deployed.
 NOT_DEPLOYED = {"jobs/trainer/Dockerfile.benchmark"}
 DEPLOYED = [path for path in DOCKERFILES if path.relative_to(ROOT).as_posix() not in NOT_DEPLOYED]
@@ -183,7 +185,8 @@ def test_every_image_runs_as_a_user_that_isnt_root(path: Path) -> None:
 def test_compose_images_are_pinned_by_digest(path: Path) -> None:
     # Read as text: Compose's own tags, such as !override, aren't plain YAML.
     images = re.findall(r"^\s*image:\s*(\S+)", path.read_text("utf-8"), re.MULTILINE)
-    assert images
+    # The check that something was found guards against this pattern silently matching nothing.
+    assert images or path.name in OVERLAYS_WITHOUT_IMAGES
     for image in images:
         assert DIGEST.search(image), image
 

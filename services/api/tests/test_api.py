@@ -4,6 +4,7 @@ import gzip
 import json
 import threading
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 from typing import Any
 
 import psycopg
@@ -13,7 +14,14 @@ from api_test_helpers import METRICS_TOKEN, PASSWORD, Browser, Stack, make_setti
 from fastapi.routing import APIRoute
 from psycopg.types.json import Jsonb
 from wikiguard_api.access import Principal
-from wikiguard_api.app import MAX_PAGE_SIZE, SESSION_COOKIE, create_app
+from wikiguard_api.app import (
+    LIVE_LIST_TTL_SECONDS,
+    MAX_PAGE_SIZE,
+    SESSION_COOKIE,
+    SNAPSHOT_LIST_TTL_SECONDS,
+    client_ip,
+    create_app,
+)
 from wikiguard_api.foundations import DatabaseUnavailable
 
 pytestmark = pytest.mark.integration
@@ -246,6 +254,39 @@ def test_with_an_edge_secret_direct_requests_are_refused(stack: Stack) -> None:
     response = browser.client.post("/v1/auth/guest", json={"tab_id": browser.tab})
     assert response.status_code == 403
     assert response.json()["code"] == "direct_access"
+
+
+@pytest.mark.parametrize(
+    "stack",
+    [{"edge_shared_secret": "edge-new-secret", "edge_shared_secret_previous": "edge-old-secret"}],
+    indirect=True,
+)
+def test_during_a_rotation_both_edge_secrets_work_and_nothing_else(stack: Stack) -> None:
+    """The Worker and Render change at different times; neither side's value may be refused."""
+    browser = stack.browser()
+
+    def status(secret: str) -> int:
+        return browser.client.get("/v1/models", headers={"x-edge-secret": secret}).status_code
+
+    assert status("edge-new-secret") != 403
+    assert status("edge-old-secret") != 403
+    assert status("edge-other-secret") == 403
+    assert status("") == 403
+
+
+@pytest.mark.parametrize(
+    "stack",
+    [{"edge_shared_secret": "edge-new-secret", "edge_shared_secret_previous": "edge-old-secret"}],
+    indirect=True,
+)
+def test_the_previous_edge_secret_still_proves_the_client_ip(stack: Stack) -> None:
+    request = SimpleNamespace(
+        headers={"x-edge-secret": "edge-old-secret", "x-wikiguard-client-ip": "203.0.113.9"},
+        client=SimpleNamespace(host="10.0.0.1"),
+    )
+    assert client_ip(request, stack.settings) == "203.0.113.9"  # type: ignore[arg-type]
+    request.headers["x-edge-secret"] = "wrong"
+    assert client_ip(request, stack.settings) == "10.0.0.1"  # type: ignore[arg-type]
 
 
 @pytest.mark.parametrize("stack", [{"edge_shared_secret": "edge-test-secret"}], indirect=True)
@@ -709,6 +750,27 @@ def test_a_snapshot_shows_every_edit_however_old(
     rest = guest.get("/v1/feed", params={"limit": 2, "cursor": feed["next_cursor"]}).json()
     assert [item["rev_id"] for item in feed["items"] + rest["items"]] == [3, 2, 1]
     assert feed["data_mode"] == "snapshot"
+
+
+@SNAPSHOT
+def test_a_snapshots_lists_are_cached_long_and_a_review_still_shows_at_once(
+    user: Browser, stack: Stack, db: psycopg.Connection[Any]
+) -> None:
+    """F-176: a snapshot never changes except through a review, which clears the caches."""
+    context = stack.app.state.context
+    assert context.feed_cache.ttl == SNAPSHOT_LIST_TTL_SECONDS
+    assert context.queue_cache.ttl == SNAPSHOT_LIST_TTL_SECONDS
+    seed_edit(db, 1, score=0.9)
+    seed_edit(db, 2, score=0.8)
+    assert [item["rev_id"] for item in user.get("/v1/queue").json()["items"]] == [1, 2]
+    review = user.put("/v1/edits/1/review", json={"decision": "ok"})
+    assert review.status_code == 200
+    assert [item["rev_id"] for item in user.get("/v1/queue").json()["items"]] == [2]
+
+
+def test_live_lists_are_cached_for_seconds(stack: Stack) -> None:
+    assert stack.app.state.context.feed_cache.ttl == LIVE_LIST_TTL_SECONDS
+    assert stack.app.state.context.queue_cache.ttl == LIVE_LIST_TTL_SECONDS
 
 
 @SNAPSHOT
@@ -1252,7 +1314,9 @@ def test_a_large_chunked_body_is_refused(stack: Stack) -> None:
             content=chunks(),
             headers={"content-type": "application/json"},
         )
-    assert response.status_code in {400, 413, 422}
+    # F-167: it was a plain 400, because FastAPI rewrapped the limit's error.
+    assert response.status_code == 413
+    assert response.json()["code"] == "body_too_large"
 
 
 def test_metrics_need_the_bearer_token(stack: Stack) -> None:

@@ -17,6 +17,10 @@ Rules that aren't obvious, all recorded in docs/decision.md (DEC-054):
   full slots always count, because a poison row can't cause those and overload must open breakers.
 - The last model is tried even when its breaker is open. Nothing stands behind it, so skipping it
   could only turn a slow answer into no answer.
+- An answer is a fallback whenever the champion didn't give it, not only when a model ahead of it
+  failed just now. A champion that never loaded isn't in the chain at all, and without this rule
+  the first model left would say "no fallback", hiding the outage (F-156, found by failure
+  injection). A forced model is flagged as forced instead.
 """
 
 import logging
@@ -40,6 +44,8 @@ BREAKER_COOLDOWN_SECONDS = 60.0
 # One for a running call and one spare, so a single timed-out call doesn't block the next.
 DEFAULT_POOL_SIZE = 2
 MS_PER_SECOND = 1000.0
+# The registry alias of the model that should answer. chain.CHAIN_ALIASES starts with it.
+CHAMPION_ALIAS = "champion"
 
 
 class Scorer(Protocol):
@@ -304,7 +310,7 @@ class Predictor:
             model_name=link.entry.model_name,
             model_version=link.entry.model_version,
             threshold=link.entry.model.threshold,
-            used_fallback=position > 0,
+            used_fallback=not self._forced and (position > 0 or link.entry.alias != CHAMPION_ALIAS),
             forced=self._forced,
             latency_ms=(time.perf_counter() - started) * MS_PER_SECOND,
             attempts=tuple(attempts),

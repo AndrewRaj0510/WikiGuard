@@ -66,6 +66,7 @@ export function FeedView() {
             updatedAt={feed.updatedAt}
             serverStale={feed.data?.page.stale}
             snapshot={snapshot}
+            newestAt={items[0]?.edited_at}
           />
         }
       />

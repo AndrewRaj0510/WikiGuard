@@ -101,12 +101,26 @@ def apply(connection: psycopg.Connection[Any], windows: Windows, now: datetime) 
     }
 
 
+class NothingFeedsThisDatabase(RuntimeError):
+    """No edit is newer than the rows window, so these rules would delete every edit."""
+
+
 def run(
     connection: psycopg.Connection[Any], now: datetime | None = None, limit: int = LIMIT_BYTES
 ) -> dict[str, Any]:
     now = now or datetime.now(UTC)
     size = database_size(connection)
     windows = windows_for(size, limit)
+    # The live pipeline adds about 86,000 edits a day. With none inside the window, nothing is
+    # writing here: the demo's fixed snapshot (DEC-091), or an outage of days. Either way these
+    # windows would empty the edits table, and the demo would be gone (F-174).
+    row = connection.execute("SELECT max(edited_at) FROM edits").fetchone()
+    newest = row[0] if row else None
+    if newest is not None and newest < now - windows.rows:
+        raise NothingFeedsThisDatabase(
+            f"the newest edit is from {newest:%Y-%m-%d %H:%M}, older than the {windows.rows} "
+            "window; nothing is writing to this database, so retention won't empty it"
+        )
     if windows is not NORMAL:
         # Phase 7 routes this to an alert. The log line is the signal until then.
         logger.warning("Database at %.0f%% of its limit: %s", 100 * size / limit, windows.level)
@@ -136,7 +150,11 @@ def main() -> int:
     with psycopg.connect(
         settings.database_url.get_secret_value(), prepare_threshold=None, connect_timeout=10
     ) as connection:
-        logger.info("Retention finished: %s", run(connection))
+        try:
+            logger.info("Retention finished: %s", run(connection))
+        except NothingFeedsThisDatabase as error:
+            logger.error("Refused: %s", error)
+            return 1
     return 0
 
 

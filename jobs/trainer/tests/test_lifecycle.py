@@ -505,3 +505,31 @@ def test_gc_frees_the_remote_only_once_pointers_are_published(
     git("push", "-q", "origin", "main", cwd=repo)
     assert dvc.gc_cloud(enabled=True) == "done"
     assert remote_files() < held
+
+
+def test_a_failed_trainer_run_is_alerted_and_still_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    """F-159: with MLflow down, the trainer used to fail with no alert at all."""
+    import trainer.lifecycle as lifecycle_module
+
+    sent: list[tuple[str, str, str]] = []
+
+    class Recording(Alerter):
+        def send(self, title: str, detail: str, severity: Any = "warning") -> bool:
+            sent.append((title, detail, severity))
+            return False
+
+    def down(settings: Any, args: Any) -> str:
+        raise ConnectionError("http://127.0.0.1:9 refused")
+
+    monkeypatch.setattr(lifecycle_module, "Alerter", Recording)
+    monkeypatch.setattr(lifecycle_module, "_run", down)
+    monkeypatch.setattr(
+        lifecycle_module, "load_settings", lambda _: SimpleNamespace(discord_webhook_url=None)
+    )
+    with pytest.raises(ConnectionError):
+        lifecycle_module.main(["retrain", "--request", "7", "--run", "3"])
+    assert [(title, severity) for title, _, severity in sent] == [
+        ("The trainer's retrain failed", "critical")
+    ]
+    assert "ConnectionError" in sent[0][1]
+    assert "127.0.0.1" not in sent[0][1]

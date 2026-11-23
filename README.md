@@ -167,10 +167,10 @@ The project is built phase by phase. Model results are from a held-out test wind
 | 2 | Train and evaluate five models | Trained, evaluated, and registered on DagsHub; ARM benchmarks still open |
 | 3 | Serving, API, and Explain | Built and tested locally. Not deployed, and Explain not yet measured on a real LLM |
 | 4 | Frontend | Done. Live on Vercel at [wiki-guard.vercel.app](https://wiki-guard.vercel.app); the console connects once the API is on Render (Phase 7) |
-| 5 | Monitoring and continuous training | Built and tested locally. Drift-to-promotion and label poisoning replayed on real data in a sandbox; the rollback replay and anything live are still to run |
+| 5 | Monitoring and continuous training | Built and tested locally. Drift-to-promotion and label poisoning replayed on real data in a sandbox; the rollback replay ran in Phase 8; anything live is still to run |
 | 6 | CI/CD and security | Built and tested locally: full CI, hash-locked installs, multi-arch image pipeline, threat model. The workflows first run on GitHub when this is pushed; staging and deploys wait for Phase 7 |
 | 7 | Kubernetes and deployment | Built and run on a local cluster (kind) against the live Wikimedia stream: Helm chart, Pod Security, default-deny networking, Prometheus alerts, Grafana dashboards, encrypted backups with a timed restore. The VM was dropped, so the cluster isn't deployed. The demo's data and its "snapshot, not live" label are built; Render and the Cloudflare Worker wait on my accounts |
-| 8 | Production hardening | Not started |
+| 8 | Production hardening | Done, locally (nothing behind the frontend is deployed). Failure injection done: every row of the failure table broken on the real stack (locally, on Compose), and six problems it found fixed. Load tests done with k6 at Render's limits: reads and the stream meet their SLOs, `/predict` doesn't with RoBERTa on 0.1 CPU (p95 2.4 to 3.9 s against 300 ms). Self-penetration test done against the OWASP API and LLM Top 10 through the real Worker's code: 29 of 30 attacks held, one fix; a bot can hold the guest seat (open). Rehearsed locally: a rotation of every secret the API holds with no visitor refused, a leaked-password incident contained in 44 s, the demo's database rebuilt from a backup in under 30 s, and a model rollback; no secret, token, username, or diff text in any service's log or anywhere a browser can read. Every alert has a runbook; what a visitor costs each free tier is measured, and the single seat keeps the worst case inside every limit ($0 apart from OpenAI credits); the deploy checklist runs locally. The 7-day unattended run was dropped (DEC-091) |
 | 9 | Polish and demo | Not started |
 
 ## Repository layout
@@ -381,7 +381,30 @@ The monitor or the owner adds a `retrain_requests` row, and the poller runs `TRA
 
 Settings: `RETRAIN_INTERVAL_DAYS` (1, 7, or 14), `RETRAIN_ON_DRIFT`, `RETRAIN_STARTUP_DELAY_SECONDS`, `RETRAIN_MODELS` (CPU models only), `RETRAIN_TIMEOUT_MINUTES`, `RETRAIN_THREADS`, `SHADOW_HOURS`, `SNAPSHOT_GC_ENABLED`, and `STORAGE_ALERT_BYTES`, all in `.env.example`. Migration 0004 adds `shadow_scores`, so run the migrations again.
 
-To replay the loops in a sandbox, against a throwaway Postgres (never Supabase): `.venv-train\Scripts\python scripts\simulate_continuous_training.py drift --admin-url postgresql://USER:PASSWORD@127.0.0.1:5434/postgres`. The other scenarios are `poisoning` and `rollback`. It reads no `.env`, and only reads `data/runs`.
+To replay the loops in a sandbox, against a throwaway Postgres (never Supabase): `.venv-train\Scripts\python scripts\simulate_continuous_training.py drift --admin-url postgresql://USER:PASSWORD@127.0.0.1:5434/postgres`. The other scenarios are `poisoning`, `rollback`, and `registry_down` (a retrain with MLflow down). It reads no `.env`, and only reads `data/runs`.
+
+### Load tests
+
+`python scripts/load_test.py up` starts the API at Render's free limits (0.1 CPU, 512 MB) over the demo's dataset, then `predict`, `reads --mode normal|spike|soak [--pacing browser]`, `explain`, and `replay` each run one k6 or replay scenario and write `data/load_test/SCENARIO-LABEL.json`; `down` removes it all. It needs Docker and k6 (`winget install GrafanaLabs.k6`). Explain talks to a fake LLM (`tests/e2e/fake_llm.py`) over TLS with a certificate made for the run, so nothing calls a real one. `--set LT_PREDICT_TIMEOUT_MS 300` and `--label` make a tuning run to compare.
+
+### Usage per visitor
+
+`python scripts/measure_usage.py` (after `python scripts/load_test.py up`) builds the frontend as Vercel does, puts the real Worker in front, and has a guest in Chromium sit on each page while it counts requests and the API's and Postgres's bytes. Results in `data/usage.json`; what they mean for each free limit is summarised in the project's cost notes.
+
+### Rehearsals and the log check
+
+These run on the same local stack as the load tests (`python scripts/load_test.py up` first, `down` after) and read no `.env`:
+- `python scripts/rehearse_incident.py` rotates every secret the API holds, then plays a leaked-password incident, following `docs/runbooks/secret-rotation.md` and `security-incident.md`, while a visitor polls through the real Worker. Results in `data/rehearsal.json`.
+- `python scripts/rehearse_restore.py --admin-url postgresql://USER:PASSWORD@127.0.0.1:PORT/postgres` backs the stack's database up, rotates the backup key, and rebuilds the demo's database in a fresh throwaway Postgres (never Supabase), checking every table.
+- `python scripts/check_logs.py browser` builds the frontend with secrets in its environment and checks in Chromium that nothing a browser receives or stores holds one. `python scripts/check_logs.py stack` runs on its own: the whole pipeline, then every log searched for secrets, tokens, usernames, and diff text.
+
+### Penetration test
+
+`python scripts/pentest.py` runs every attack in the plan's list against the load test's stack (the API at Render's limits on the demo's data) behind the real Worker, `edge/worker.js`, run in Node by `scripts/edge_local.mjs`. It records each attack, its OWASP API or LLM Top 10 category, and whether it held in `data/pentest.json`. `--only edge auth brute authz input llm seat other logs` runs some areas, `--browser` adds the XSS check in Chromium (`scripts/pentest_browser.mjs`), and `--skip-build` uses a frontend you've already built. It needs Docker, Node, and about 15 minutes, most of it the guest-seat attacks; `--browser` also needs the frontend's Playwright Chromium. It shortens guest sessions to 2 minutes and the LLM's daily cap to 40 for the test only, and calls nothing outside the laptop. Results: `docs/security.md`, section 7b.
+
+### Failure injection
+
+`python scripts/inject_failures.py` breaks each row of the failure table (plan, section 14) on the end-to-end Compose stack and records what happened in `data/failure_injection.json`: the stream, Wikimedia's rate limits, Redpanda, the champion, every model, Postgres, the registry, the LLM, the API, and the cluster half. `--rows 4 5` runs some, `--frontend` builds the app and screenshots each outage in Chromium (`scripts/capture_failure_states.mjs`), `--keep` leaves the stack up. It needs Docker and about an hour with `--frontend`, because two rows hold their outage past the 10-minute freshness threshold. It calls no outside service: Wikimedia is a mock with switches (`docker-compose.failures.yml`), and the LLM hosts and the registry point at addresses where nothing listens.
 
 ### Supabase
 

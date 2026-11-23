@@ -26,6 +26,10 @@ replayed rather than waited out (SHADOW_HOURS=0).
   should restore the chain.
 - poisoning: a burst of fake reverts on one day. The retrain's snapshot should be rejected and
   nothing should change.
+- registry_down (Phase 8, failure injection): a retrain while MLflow is down, which the failure
+  table says makes training wait. Twice: down when the trainer starts (a real MLflow client
+  pointed at a port where nothing listens), and down after it started (every registry call
+  fails). The summary records how far each run got and how long it took.
 """
 
 import argparse
@@ -57,12 +61,12 @@ from trainer.lifecycle import Lifecycle  # noqa: E402
 from trainer.pipeline import Paths, Pipeline, sanity_checks  # noqa: E402
 from trainer.records import DbRecorder, Listing  # noqa: E402
 from trainer.reference import save_for_model  # noqa: E402
-from trainer.registry import LocalRegistry, snapshot_of_aliases  # noqa: E402
+from trainer.registry import LocalRegistry, MlflowAliasRegistry, snapshot_of_aliases  # noqa: E402
 from trainer.storage import retain  # noqa: E402
 from trainer.train import train_final  # noqa: E402
 from wikiguard_core.alerts import Alerter  # noqa: E402
 from wikiguard_core.archive import EDITS, LABELS, SCORES, write_rows  # noqa: E402
-from wikiguard_core.chain import ModelCache, ServingChain, ShadowSlot  # noqa: E402
+from wikiguard_core.chain import LocalRuns, ModelCache, ServingChain, ShadowSlot  # noqa: E402
 from wikiguard_core.dvcops import DvcRepo  # noqa: E402
 from wikiguard_core.features import FEATURE_VERSION, build_features  # noqa: E402
 from wikiguard_core.inference import ServedModel, read_config  # noqa: E402
@@ -551,11 +555,18 @@ def rollback(admin_url: str) -> None:
             [(datetime.min.replace(tzinfo=UTC), champion), (promoted_at, bad)],
         ),
     )
+    # The scorer's own chain code, serving from the sandbox registry, as the cluster's scorer
+    # serves from MLflow: it loads the bad model now and swaps when the aliases move back.
+    chain = ServingChain(LocalRuns(box.registry.root), ModelCache(box.folder / "serving"), 5000)
+    box.timed("serving_load", chain.load)
+    serving_before = [ref.folder_name for ref in chain.current.refs]
     box.clock = as_of
     report = box.timed("monitor", lambda: box.monitor(as_of))
     started = time.perf_counter()
     handled = box.poll()
     box.timings["rollback_request_to_restored"] = round(time.perf_counter() - started, 1)
+    swapped = box.timed("serving_reload_after_rollback", chain.reload)
+    serving_after = [ref.folder_name for ref in chain.current.refs]
     box.write(
         {
             "scenario": "rollback",
@@ -569,6 +580,9 @@ def rollback(admin_url: str) -> None:
             "post_check": report.post_check,
             "monitor_decision": report.decision,
             "poller_after_monitor": handled,
+            "serving_before_rollback": serving_before,
+            "serving_swapped": swapped,
+            "serving_after_rollback": serving_after,
             "runs": box.runs(),
         }
     )
@@ -600,14 +614,89 @@ def poisoning(admin_url: str) -> None:
     )
 
 
+class Unreachable:
+    """A registry that went down after the trainer started: every call fails to connect."""
+
+    def __getattr__(self, name: str) -> Any:
+        raise ConnectionError(f"registry unreachable (injected) on {name}")
+
+
+def registry_down(admin_url: str) -> None:
+    as_of = backfill_as_of(BACKFILL)
+    box = Sandbox("registry_down", admin_url, as_of, ["mlp"])
+    box.timed("archive", lambda: build_archive(box.archive, as_of))
+    before = box.registry.aliases()
+
+    def ask(reason: str) -> None:
+        box.connection.execute(
+            "INSERT INTO retrain_requests (kind, reason, requested_by) VALUES "
+            "('retrain', %s, 'user')",
+            (reason,),
+        )
+        box.connection.commit()
+
+    def drain(launchers: dict[str, Any]) -> list[dict[str, Any]]:
+        handled = []
+        while (result := run_once(box.connection, launchers)) is not None:
+            handled.append({key: result[key] for key in ("id", "kind", "status")})
+        return handled
+
+    # (a) Down when the trainer starts. lifecycle.main builds the registry first, and the real
+    # client asks MLflow for the experiment as it's made (tracking.configure). Nothing listens on
+    # port 9. The sandbox's own local registry stays, so the summary can show nothing changed.
+    def start_trainer(request: dict[str, Any]) -> None:
+        MlflowAliasRegistry("http://127.0.0.1:9", None, None)
+        box.pipeline.retrain(request["run_id"], None, box.as_of)
+
+    ask("registry down when the trainer starts")
+    at_start = box.timed(
+        "down_at_start", lambda: drain(box.launchers() | {"retrain": start_trainer})
+    )
+    trained_at_start = sorted(p.name for p in box.paths.workdir.glob("run-*/*") if p.is_dir())
+    # The client pointed MLflow's tracking at the dead address too; put the sandbox's back.
+    isolate_mlflow(box.folder / "mlflow")
+
+    # (b) Down after the trainer started: the run gets as far as it can without the registry.
+    box.pipeline.registry = Unreachable()  # type: ignore[assignment]
+    box.lifecycle.registry = Unreachable()  # type: ignore[assignment]
+    ask("registry down during the run")
+    mid_run = box.timed("down_mid_run", box.poll)
+    requests = box.connection.execute(
+        "SELECT reason, status, details FROM retrain_requests ORDER BY id"
+    ).fetchall()
+    box.connection.commit()
+    box.write(
+        {
+            "scenario": "registry_down",
+            "as_of": as_of,
+            "down_at_start": {"poller": at_start, "trained": trained_at_start},
+            "down_mid_run": {
+                "poller": mid_run,
+                "trained": sorted(p.name for p in box.paths.workdir.glob("run-*/*") if p.is_dir()),
+            },
+            "requests": [
+                {"reason": row[0], "status": row[1], "details": row[2]} for row in requests
+            ],
+            "runs": box.runs(),
+            "unchanged": box.registry.aliases() == before,
+        }
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("scenario", choices=["drift", "rollback", "poisoning"])
+    parser.add_argument("scenario", choices=["drift", "rollback", "poisoning", "registry_down"])
     parser.add_argument("--admin-url", required=True, help="a throwaway Postgres, never Supabase")
     args = parser.parse_args()
     if "supabase" in args.admin_url:
         raise SystemExit("refusing: this creates and drops databases")
-    {"drift": drift, "rollback": rollback, "poisoning": poisoning}[args.scenario](args.admin_url)
+    scenarios = {
+        "drift": drift,
+        "rollback": rollback,
+        "poisoning": poisoning,
+        "registry_down": registry_down,
+    }
+    scenarios[args.scenario](args.admin_url)
     return 0
 
 

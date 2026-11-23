@@ -16,6 +16,7 @@ share one call.
 import html
 import logging
 import re
+import threading
 import unicodedata
 from dataclasses import dataclass
 from typing import Any, Protocol
@@ -190,6 +191,7 @@ class Explainer:
         daily_cap: int,
         guest_limit: int,
         metrics: ExplainMetrics | None = None,
+        max_in_flight: int = 4,
     ) -> None:
         self.db = db
         self.providers = providers
@@ -197,6 +199,11 @@ class Explainer:
         self.guest_limit = guest_limit
         self.metrics = metrics or NoExplainMetrics()
         self._flight: SingleFlight[Answer] = SingleFlight()
+        # LLM calls at once. Each costs the API CPU for TLS, JSON, and two writes, and on 0.1 CPU
+        # thirty together starved the owner's other requests for seconds (F-163). Past the limit
+        # the answer is "busy" at once, as /predict does with its slots. Cached answers and
+        # callers waiting on the same edit's call take no slot.
+        self._slots = threading.BoundedSemaphore(max_in_flight)
 
     def _cached(self, rev_id: int) -> Answer | None:
         models = [provider.model for provider in self.providers]
@@ -307,9 +314,14 @@ class Explainer:
             again = self._cached(rev_id)
             if again is not None:
                 return again
-            if is_guest and not self._spend_guest_call(session_id):
-                return Answer(UNAVAILABLE, False, False, "guest_limit")
-            return self._call_llm(rev_id, edit, request_id)
+            if not self._slots.acquire(blocking=False):
+                return Answer(UNAVAILABLE, False, False, "busy")
+            try:
+                if is_guest and not self._spend_guest_call(session_id):
+                    return Answer(UNAVAILABLE, False, False, "guest_limit")
+                return self._call_llm(rev_id, edit, request_id)
+            finally:
+                self._slots.release()
 
         answer, _ = self._flight.do(rev_id, work)
         return answer

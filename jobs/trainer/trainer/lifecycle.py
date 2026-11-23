@@ -308,6 +308,26 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--as-of", type=parse_time)
     args = parser.parse_args(argv)
     settings = load_settings(Settings)
+    # Made before anything touches MLflow, so a registry that's down when the trainer starts is
+    # alerted on too. Without this, a failed run was only a row on the Health page (F-159).
+    webhook = settings.discord_webhook_url
+    alerter = Alerter("trainer", webhook.get_secret_value() if webhook else None)
+    try:
+        outcome = _run(settings, args)
+    except Exception as error:
+        # Names only: the message can quote a URL, and alerts carry no untrusted text.
+        alerter.send(
+            f"The trainer's {args.kind} failed",
+            f"request {args.request}: {type(error).__name__}. The poller marks it failed; the "
+            "next scheduled or triggered request tries again.",
+            "critical",
+        )
+        raise
+    logger.info("%s finished: %s", args.kind, outcome)
+    return 0
+
+
+def _run(settings: Any, args: argparse.Namespace) -> str:
     with psycopg.connect(
         settings.database_url.get_secret_value(), prepare_threshold=None, connect_timeout=10
     ) as connection:
@@ -315,18 +335,15 @@ def main(argv: list[str] | None = None) -> int:
         if args.kind in ("retrain", "shadow-check") and args.run is None:
             raise LifecycleError(f"{args.kind} needs --run")
         if args.kind == "retrain":
-            outcome = lifecycle.pipeline.retrain(args.run, args.snapshot, args.as_of)
-        elif args.kind == "shadow-check":
-            outcome = lifecycle.shadow_check(args.run)
-        elif args.kind == "promote":
-            outcome = lifecycle.promote(args.request)
-        else:
-            request = lifecycle.recorder.request(args.request)
-            outcome = lifecycle.rollback(
-                args.request, str(request["reason"]), str(request["requested_by"])
-            )
-    logger.info("%s finished: %s", args.kind, outcome)
-    return 0
+            return str(lifecycle.pipeline.retrain(args.run, args.snapshot, args.as_of))
+        if args.kind == "shadow-check":
+            return str(lifecycle.shadow_check(args.run))
+        if args.kind == "promote":
+            return str(lifecycle.promote(args.request))
+        request = lifecycle.recorder.request(args.request)
+        return str(
+            lifecycle.rollback(args.request, str(request["reason"]), str(request["requested_by"]))
+        )
 
 
 if __name__ == "__main__":

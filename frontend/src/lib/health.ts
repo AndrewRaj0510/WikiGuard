@@ -240,13 +240,9 @@ export function healthSignals(summary: HealthSummary, now: number): HealthSignal
       detail: `${open.map((item) => item.model_name).join(", ")} ${open.length > 1 ? "are" : "is"} failing, so a fallback model is answering.`,
     });
   }
-  if (summary.fallback_rate_24h !== null && summary.fallback_rate_24h >= FALLBACK_WARN_RATE) {
-    signals.push({
-      tone: "warn",
-      title: "Degraded",
-      detail: `${Math.round(summary.fallback_rate_24h * 100)}% of ${snapshot ? "the dataset’s" : "the last day’s"} edits were scored by a fallback model.`,
-    });
-  }
+  // Stopped scoring ranks above a high fallback rate: the banner shows only the first signal,
+  // and a weaker model still scores while a stopped pipeline scores nothing. Failure injection
+  // found the fallback warning hiding a stopped cluster (F-158).
   // A snapshot was scored once, so its last score is old by design, not a stopped scorer.
   if (!snapshot && summary.last_scored_at && summary.scored_last_24h > 0) {
     const minutes = (now - Date.parse(summary.last_scored_at)) / 60_000;
@@ -257,6 +253,13 @@ export function healthSignals(summary: HealthSummary, now: number): HealthSignal
         detail: `No edit has been scored for ${Math.round(minutes)} minutes. The scorer may be stopped.`,
       });
     }
+  }
+  if (summary.fallback_rate_24h !== null && summary.fallback_rate_24h >= FALLBACK_WARN_RATE) {
+    signals.push({
+      tone: "warn",
+      title: "Degraded",
+      detail: `${Math.round(summary.fallback_rate_24h * 100)}% of ${snapshot ? "the dataset’s" : "the last day’s"} edits were scored by a fallback model.`,
+    });
   }
   if (summary.stale) {
     signals.push({

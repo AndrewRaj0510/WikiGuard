@@ -1,0 +1,59 @@
+# Added on top of docker-compose.yml and docker-compose.e2e.yml by scripts/load_test.py (PLAN.md,
+# Phase 8, load tests). The API under test is api-render: Render's free limits (0.1 CPU, 512 MB)
+# and render.yaml's settings, over the demo's data (DATA_MODE=snapshot, DEC-091).
+services:
+  api-render:
+    # The Dockerfile's health check starts a Python process inside the container every 30 s. At
+    # 0.1 CPU each one takes 2 to 3 s and competes with the API for its whole CPU budget. Render
+    # checks /health over HTTP instead, and the chart uses Kubernetes probes, so it's off here.
+    healthcheck:
+      disable: true
+    environment:
+      DATA_MODE: snapshot
+      # As behind the Worker: k6 sends this with each virtual user's own address, so limits by IP
+      # apply per visitor, not to everyone on 127.0.0.1 at once.
+      EDGE_SHARED_SECRET: ${LT_EDGE_SECRET:?LT_EDGE_SECRET is set by scripts/load_test.py}
+      # The secret rehearsal (scripts/rehearse_incident.py) rotates these as Render's dashboard
+      # would: the edge secret's previous value during a rotation, the API's own database
+      # password, and the read-only switch an incident starts with.
+      EDGE_SHARED_SECRET_PREVIOUS: ${LT_EDGE_SECRET_PREVIOUS:-}
+      DATABASE_URL: postgresql://api_login:${LT_API_DB_PASSWORD:-${COMPOSE_LOGIN_PASSWORD}}@postgres:5432/${POSTGRES_DB:-wikiguard}
+      READ_ONLY_MODE: ${LT_READ_ONLY:-false}
+      PREDICT_TIMEOUT_MS: ${LT_PREDICT_TIMEOUT_MS:-5000}
+      EXPLAIN_ENABLED: ${LT_EXPLAIN_ENABLED:-false}
+      EXPLAIN_DAILY_CALL_CAP: ${LT_EXPLAIN_CAP:-100000}
+      # The penetration test (scripts/pentest.py) puts the real Worker in front, on another origin,
+      # and shortens the guest limits so holding the seat can be tried in minutes, not 15.
+      CORS_ALLOWED_ORIGINS: ${LT_CORS_ORIGINS:-http://localhost:3000}
+      GUEST_MAX_MINUTES: ${LT_GUEST_MAX_MINUTES:-15}
+      GUEST_IDLE_MINUTES: ${LT_GUEST_IDLE_MINUTES:-5}
+      LLM_MODEL: loadtest-model
+      LLM_BACKUP_MODEL: loadtest-backup
+      # Not keys: the two LLM hosts are the fake-llm container below on this network.
+      OPENAI_API_KEY: loadtest-not-a-key
+      GEMINI_API_KEY: loadtest-not-a-key
+      SSL_CERT_FILE: /llm-cert/cert.pem
+    volumes:
+      - ${LT_CERT_DIR:?LT_CERT_DIR is set by scripts/load_test.py}:/llm-cert:ro
+
+  fake-llm:
+    image: python:3.11-slim@sha256:07d4824036af339fa1b6ef769cc99d9c10a141769538b52b3b597c84f7a7b535
+    profiles: ["render"]
+    environment:
+      FAKE_LLM_DELAY_MS: ${LT_LLM_DELAY_MS:-1500}
+      FAKE_LLM_ANSWER: ${LT_LLM_ANSWER:-}
+    volumes:
+      - ./tests/e2e/fake_llm.py:/app/fake_llm.py:ro
+      - ${LT_CERT_DIR:?LT_CERT_DIR is set by scripts/load_test.py}:/llm-cert:ro
+    command: ["python", "/app/fake_llm.py", "/llm-cert"]
+    ports:
+      - "127.0.0.1:18081:8080"
+    networks:
+      default:
+        aliases: [api.openai.com, generativelanguage.googleapis.com]
+
+  # The edits.raw replay: the scorer at the production chart's limit (k8s values.yaml).
+  scorer:
+    cpus: 1.5
+    mem_limit: 3g
+    memswap_limit: 3g

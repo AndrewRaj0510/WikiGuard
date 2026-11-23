@@ -20,6 +20,7 @@ from wikiguard_core.artifacts import write_checksums
 from wikiguard_core.chain import ModelCache, ModelRef, ServingChain, ShadowSlot
 from wikiguard_core.features import FEATURE_VERSION
 from wikiguard_core.kafka import EDITS_DLQ, EDITS_SCORED, PublishError
+from wikiguard_core.predictor import AllModelsFailed, Attempt, Outcome
 from wikiguard_core.schemas import ScoreRecord
 
 NOW = datetime.now(UTC)
@@ -315,6 +316,33 @@ def test_a_poison_edit_opens_no_breakers(harness: Harness) -> None:
     assert all(
         status.breaker.value == "closed" for status in harness.chain.current.predictor.status()
     )
+
+
+def test_an_edit_that_timed_out_everywhere_is_kept_unscored_not_dead_lettered(
+    harness: Harness,
+) -> None:
+    """F-157: under overload the known-good edit can still pass, but a time-out isn't the edit's
+    fault, so the edit waits for a rescore instead of going to the DLQ."""
+    predictor = harness.chain.current.predictor
+    real = predictor.score
+
+    def overloaded(rows: Any) -> Any:
+        if any(row.get("comment") == "slow" for row in rows):
+            raise AllModelsFailed(
+                [
+                    Attempt("champion", "roberta", Outcome.TIMEOUT),
+                    Attempt("fallback-1", "bilstm", Outcome.BUSY),
+                    Attempt("fallback-2", "mlp", Outcome.TIMEOUT),
+                ]
+            )
+        return real(rows)
+
+    predictor.score = overloaded  # type: ignore[method-assign]
+    items = harness.worker.score(parsed(harness, edit_json(1, comment="slow"), edit_json(2)))
+    assert [item.edit.rev_id for item in items] == [1, 2]
+    assert items[0].score is None
+    assert items[1].score is not None
+    assert harness.publisher.on(EDITS_DLQ) == []
 
 
 def test_when_every_model_is_broken_edits_are_kept_unscored(harness: Harness) -> None:

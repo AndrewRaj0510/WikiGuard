@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
 
-from confluent_kafka import Consumer
+from confluent_kafka import Consumer, KafkaException
 from prometheus_client import CollectorRegistry, Counter, Gauge
 from pydantic import BaseModel, ValidationError
 from wikiguard_core.archive import (
@@ -142,7 +142,13 @@ class Archiver:
             if rows:
                 write_rows(self.root, dataset, rows)
                 self.rows_written.labels(dataset).inc(len(rows))
-        self.consumer.commit(asynchronous=False)
+        try:
+            self.consumer.commit(asynchronous=False)
+        except KafkaException as error:
+            # Redpanda is down. The rows are written, so keep going: the next commit covers them,
+            # and a replay before it only adds duplicates, which reads remove (DEDUPE_KEYS). It
+            # used to crash here, the one service that didn't ride out the outage (F-161).
+            logger.warning("Commit failed, the next flush retries it: %s", error.args[0])
         self.buffers = {}
         self.buffered.set(0)
         self.last_flush = self.clock()

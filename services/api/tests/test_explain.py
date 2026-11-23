@@ -335,6 +335,37 @@ class TestEndpoint:
         assert len(results) == 4
         assert all(item["available"] for item in results)
 
+    def test_llm_calls_past_the_limit_answer_busy_at_once(
+        self, stack: Stack, db: psycopg.Connection[Any]
+    ) -> None:
+        """F-163: thirty LLM calls at once starved the owner's reads on 0.1 CPU."""
+        for rev in (1, 2, 3):
+            seed_edit(db, rev)
+        stack.app.state.context.explainer._slots = threading.BoundedSemaphore(2)
+        browser = stack.browser()
+        browser.login()
+        gate = threading.Event()
+        stack.provider.gate = gate
+        results: dict[int, Any] = {}
+
+        def click(rev: int) -> None:
+            results[rev] = browser.post(f"/v1/explain/{rev}").json()
+
+        threads = [threading.Thread(target=click, args=(rev,)) for rev in (1, 2)]
+        for thread in threads:
+            thread.start()
+        deadline = threading.Event()
+        while len(stack.provider.calls) < 2 and not deadline.wait(0.01):
+            pass
+        busy = browser.post("/v1/explain/3").json()
+        gate.set()
+        for thread in threads:
+            thread.join()
+        assert busy["available"] is False
+        assert busy["reason"] == "busy"
+        assert all(results[rev]["available"] for rev in (1, 2))
+        assert len(stack.provider.calls) == 2
+
     def test_the_daily_cap_is_durable_and_refuses_past_it(
         self, stack: Stack, user: Browser, db: psycopg.Connection[Any]
     ) -> None:

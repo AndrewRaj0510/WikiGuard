@@ -101,6 +101,7 @@ spec:
           labels: { severity: warning }
           annotations:
             summary: The scorer has used only the fast models for 15 minutes
+            runbook: docs/runbooks/scorer-lag.md
         - alert: DeadLetterQueueGrowing
           expr: >-
             sum(increase(scorer_dlq_total[30m])) + sum(increase(ingestor_dead_letters_total[30m]))
@@ -108,12 +109,14 @@ spec:
           labels: { severity: warning }
           annotations:
             summary: Over 20 edits went to the dead-letter queue in 30 minutes
+            runbook: docs/runbooks/ingest-outage.md
         - alert: ArchiveStalled
           expr: (sum(increase(archiver_rows_written_total[30m])) or vector(0)) == 0
           for: 30m
           labels: { severity: warning }
           annotations:
             summary: Nothing written to the archive for an hour
+            runbook: docs/runbooks/service-down.md
         - alert: WikiGuardWorkerMissing
           # A scaled-down or deleted worker has no target, so `up == 0` can't see it.
           expr: >-
@@ -124,12 +127,14 @@ spec:
           labels: { severity: critical }
           annotations:
             summary: A WikiGuard worker has no running pod
+            runbook: docs/runbooks/service-down.md
         - alert: WikiGuardTargetDown
           expr: up{namespace="{{ .Release.Namespace }}"} == 0
           for: 5m
           labels: { severity: critical }
           annotations:
             summary: "{{ "{{ $labels.job }}" }} hasn't answered a scrape for 5 minutes"
+            runbook: docs/runbooks/service-down.md
     - name: wikiguard.jobs
       rules:
         - alert: LabelerMissed
@@ -139,6 +144,7 @@ spec:
           labels: { severity: warning }
           annotations:
             summary: The hourly labeler hasn't succeeded for 3 hours
+            runbook: docs/runbooks/jobs-missed.md
         - alert: DailyJobMissed
           expr: >-
             time() - kube_cronjob_status_last_successful_time{namespace="{{ .Release.Namespace }}",
@@ -147,6 +153,7 @@ spec:
           labels: { severity: warning }
           annotations:
             summary: "{{ "{{ $labels.cronjob }}" }} hasn't succeeded for over a day"
+            runbook: docs/runbooks/jobs-missed.md
         - alert: BackupFailed
           expr: >-
             time() - kube_cronjob_status_last_successful_time{namespace="{{ .Release.Namespace }}",
@@ -162,6 +169,7 @@ spec:
           labels: { severity: warning }
           annotations:
             summary: The retrain poller hasn't finished a run for 15 minutes
+            runbook: docs/runbooks/jobs-missed.md
     - name: wikiguard.capacity
       rules:
         - alert: DiskOver80Percent
@@ -172,12 +180,14 @@ spec:
           labels: { severity: warning }
           annotations:
             summary: The node's disk is over 80% full
+            runbook: docs/runbooks/storage-full.md
         - alert: ArchiveNearObjectStorageLimit
           # The mirror has to fit Oracle's 20 GB of free Object Storage, backups included.
           expr: max(archiver_archive_bytes) > 0.8 * 20 * 1024^3
           labels: { severity: warning }
           annotations:
             summary: The archive is over 80% of Oracle's 20 GB free Object Storage
+            runbook: docs/runbooks/storage-full.md
         - alert: VmCouldBeReclaimed
           # Oracle may reclaim an A1 VM whose 95th-percentile CPU and memory both stay under 20%
           # for 7 days (docs/cost.md). Warn on 6 days, so there's a day to act.
@@ -190,6 +200,7 @@ spec:
           labels: { severity: warning }
           annotations:
             summary: The VM has looked idle to Oracle's rule for 6 days
+            runbook: docs/runbooks/cluster-rebuild.md
 ---
 {{- /* Each dashboard file becomes a ConfigMap Grafana's sidecar picks up. */}}
 {{- range $path, $_ := .Files.Glob "dashboards/*.json" }}

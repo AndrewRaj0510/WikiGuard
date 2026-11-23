@@ -4,7 +4,16 @@ from typing import Any
 import psycopg
 import pytest
 from conftest import add_edit
-from retention import EMERGENCY, LIMIT_BYTES, NORMAL, SHRINK, WARNING, run, windows_for
+from retention import (
+    EMERGENCY,
+    LIMIT_BYTES,
+    NORMAL,
+    SHRINK,
+    WARNING,
+    NothingFeedsThisDatabase,
+    run,
+    windows_for,
+)
 
 NOW = datetime(2026, 11, 20, 12, tzinfo=UTC)
 
@@ -86,6 +95,7 @@ def test_high_risk_text_also_goes_after_its_window(
 @pytest.mark.integration
 def test_deleting_an_edit_takes_its_score_and_label(db: psycopg.Connection[Any]) -> None:
     add_edit(db, 1, ago(days=6))
+    add_edit(db, 2, ago(hours=1))  # the live pipeline is writing
     add_score(db, 1, 0.5)
     db.execute("INSERT INTO labels (rev_id, label) VALUES (1, 1)")
     db.execute("INSERT INTO reviews (rev_id, decision) VALUES (1, 'vandalism')")
@@ -159,3 +169,24 @@ def test_old_ended_sessions_are_removed_and_live_ones_kept(db: psycopg.Connectio
     rows = db.execute("SELECT id FROM sessions ORDER BY id").fetchall()
     db.commit()
     assert [row[0] for row in rows] == ["old-live", "recent-ended"]
+
+
+@pytest.mark.integration
+def test_a_database_nothing_writes_to_is_left_alone(db: psycopg.Connection[Any]) -> None:
+    """The demo's snapshot is weeks old by design (DEC-091): retention must not empty it."""
+    add_edit(db, 1, ago(days=20))
+    add_edit(db, 2, ago(days=25))
+    db.execute("INSERT INTO reviews (rev_id, decision) VALUES (1, 'ok')")
+    db.commit()
+
+    with pytest.raises(NothingFeedsThisDatabase):
+        run(db, NOW)
+
+    db.rollback()
+    assert rows_left(db) == {1, 2}
+    assert text_of(db, 1) == "words"
+
+
+@pytest.mark.integration
+def test_an_empty_database_is_fine(db: psycopg.Connection[Any]) -> None:
+    assert run(db, NOW)["level"] == "normal"

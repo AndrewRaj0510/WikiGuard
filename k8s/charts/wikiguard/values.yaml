@@ -102,6 +102,10 @@ workers:
     env:
       MODEL_CACHE_DIR: /models/cache
       HOME: /tmp
+      # How often the scorer checks the registry's aliases. A rollback must reach serving within
+      # 5 minutes: up to 120 s for the poller, 15 s for the trainer Job, then this, then the
+      # download. The default 300 s made the worst case over 7 minutes (F-173).
+      MODEL_POLL_SECONDS: "60"
     volumes: [models]
     egress: [internet, redpanda, database]
     # The first start downloads five models from DagsHub before it's healthy.

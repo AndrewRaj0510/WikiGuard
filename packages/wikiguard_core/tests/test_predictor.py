@@ -420,6 +420,14 @@ def test_a_failure_only_the_champion_has_still_counts() -> None:
     assert predictor.status()[0].consecutive_failures == 1
 
 
+def test_a_chain_without_its_champion_flags_every_answer_as_fallback() -> None:
+    """F-156: a champion that failed to load is left out, so its fallback answers first."""
+    chain = chain_of(FakeModel(0.8), FakeModel(0.1))[1:]
+    result = Predictor(chain, PATIENT_MS).score([ROW])
+    assert result.alias == "fallback-1"
+    assert result.used_fallback is True
+
+
 # --- FORCE_MODEL ---
 
 

@@ -71,6 +71,33 @@ tested images the version name and publishes these notes.
   they built; all prune the unused build cache. `--keep-images` keeps them.
 - On snapshot data, every console page says "Demo data: ... Not live.", and the status pill reads
   "Snapshot, not live".
+- Failure injection (`scripts/inject_failures.py`, `docker-compose.failures.yml`): breaks each
+  row of the failure table on the end-to-end Compose stack and records what happened, with a
+  Chromium watcher that screenshots each outage (`scripts/capture_failure_states.mjs`). The mock
+  Wikimedia can drop its stream, answer 429 or `maxlag`, add edits, and replay from
+  `Last-Event-ID`. A `registry_down` scenario in `scripts/simulate_continuous_training.py`.
+- Load tests with k6 (`loadtest/`, `scripts/load_test.py`, `docker-compose.loadtest.yml`): `/predict`,
+  the read endpoints at normal load, 10×, and an hour, an Explain burst against a fake LLM over
+  TLS, and a replay of `edits.raw` at 5× the real rate (`scripts/replay_edits.py`), all against
+  the API at Render's free limits on the demo's data. Results in `docs/performance.md`.
+- `EXPLAIN_MAX_CONCURRENCY` (default 4): Explain calls to the LLM past it answer "busy" at once.
+- A self-penetration test (`scripts/pentest.py`) against the OWASP API and LLM Top 10: the
+  demo's API image at Render's limits behind the real Worker's code, run in Node by
+  `scripts/edge_local.mjs`, with an XSS check in Chromium (`scripts/pentest_browser.mjs`). The
+  fake LLM can be told what to answer and reports what it was sent.
+- `EDGE_SHARED_SECRET_PREVIOUS`: during a rotation the API also accepts the old edge secret, so
+  the Worker and Render can change at different times without refusing visitors.
+- Runbooks for rotating secrets and for a security incident, and rehearsals of both
+  (`scripts/rehearse_incident.py`), of rebuilding the demo's database from a backup
+  (`scripts/rehearse_restore.py`), and of a model rollback, which now also times the scorer
+  swapping back.
+- A usage measurement (`scripts/measure_usage.py`): what one visitor costs each free tier, page
+  by page, through the real Worker. Runbooks for a full database, a paused Supabase project, a
+  used-up free quota, a worker down, and a missed job, so every alert names one, and a deploy
+  checklist.
+- A log and browser check (`scripts/check_logs.py`): every container's log over the whole
+  pipeline is searched for secrets, tokens, usernames, and diff text, and the frontend is built
+  with secrets in its environment and checked in Chromium for anything a browser could read.
 
 ### Changed
 - Scope: no free server can run the pipeline around the clock, so the public demo serves a scored
@@ -89,6 +116,13 @@ tested images the version name and publishes these notes.
   The frontend is installed with npm 11.21.2 (`packageManager`), the npm Dependabot uses, in CI
   too. Dependabot no longer offers Python past 3.11, Postgres past 17, or majors of TypeScript,
   ESLint, and `@types/node` that the toolchain can't take yet.
+- On the demo's snapshot, the queue and the feed are cached for 5 minutes instead of 2 seconds: a
+  review still shows at once, and one visitor left on the feed no longer reads past Supabase's
+  free egress.
+- The chart's scorer checks the registry's aliases every 60 s instead of 300, so a rollback
+  reaches serving within 5 minutes.
+- The API freezes its startup objects out of garbage collection once its models have loaded.
+  A full collection had stalled requests for a quarter of a second at a time on 0.1 CPU.
 
 ### Fixed
 - Every Dependabot frontend pull request failed `npm ci`: Dependabot writes lock files with npm
@@ -97,6 +131,18 @@ tested images the version name and publishes these notes.
 - `/favicon.ico` and `/robots.txt` answered with a 404 page that had no Content-Security-Policy. Found by OWASP ZAP.
 - The HTTP client's request log, which wrote whole URLs, including usernames and, in the jobs that
   alert, the Discord webhook and Healthchecks.io URLs. Its records below WARNING are now dropped.
+- A champion that failed to load made its fallbacks report `used_fallback: false`, so the
+  fallback rate, its alert, and the "Degraded" banner never showed the outage.
+- Under load the scorer dead-lettered good edits whose models had only timed out; they're now
+  stored unscored and rescored.
+- The feed's status said "Live" during a stream outage; it now says "Delayed" after 10 quiet
+  minutes, and the "Stale" banner is no longer hidden by a high fallback rate.
+- A failed retrain sent no alert; the trainer now sends one for any failed action.
+- The archiver exited when Redpanda went down; a failed commit is now retried at the next flush.
+- The retention job refuses a database nothing writes to, such as the demo's, which its 3-day
+  windows would have emptied.
+- A body over the size limit sent without a length got 400 instead of 413. Found by the
+  penetration test.
 
 ### Security
 - Workflows hold no secrets on pull requests, use a read-only token by default, and pin every

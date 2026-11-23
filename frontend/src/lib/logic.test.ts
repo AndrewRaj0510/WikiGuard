@@ -92,6 +92,12 @@ describe("health signals", () => {
     expect(healthSignals(summary({ scored_last_24h: 0 }), late)).toEqual([]);
   });
 
+  it("puts stopped scoring ahead of a high fallback rate, which it would otherwise hide", () => {
+    const late = NOW + 10 * 60_000;
+    const titles = healthSignals(summary({ fallback_rate_24h: 0.3 }), late).map((s) => s.title);
+    expect(titles).toEqual(["Stale", "Degraded"]);
+  });
+
   it("ignores breakers when this API process hasn't loaded models", () => {
     const chain = summary().chain.map((item) => ({ ...item, breaker: "open" }));
     expect(healthSignals(summary({ chain, models_loaded: false }), NOW)).toEqual([]);

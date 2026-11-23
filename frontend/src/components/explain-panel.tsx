@@ -17,6 +17,7 @@ const REASON: Record<string, string> = {
   hidden: "Wikipedia has hidden this revision, so it isn’t sent to the model.",
   read_only: "WikiGuard is read-only right now.",
   llm_error: "The language model didn’t answer. Try again later.",
+  busy: "Too many explanations are being written at once. Try again in a moment.",
 };
 
 type State =

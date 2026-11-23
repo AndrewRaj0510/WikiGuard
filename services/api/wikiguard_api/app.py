@@ -1,5 +1,6 @@
 """The public API. Everything a browser can do goes through here, and roles are checked here."""
 
+import gc
 import hashlib
 import hmac
 import json
@@ -52,6 +53,9 @@ from wikiguard_api.foundations import (
 logger = logging.getLogger("wikiguard_api")
 
 SESSION_COOKIE = "wikiguard_session"
+# How long the queue and the feed are cached. Live, they change every second; a snapshot, never.
+LIVE_LIST_TTL_SECONDS = 2.0
+SNAPSHOT_LIST_TTL_SECONDS = 300.0
 TAB_HEADER = "x-tab-id"
 CSRF_HEADER = "x-csrf-token"
 REQUEST_ID_HEADER = "x-request-id"
@@ -192,15 +196,25 @@ def get_context(request: Request) -> Context:
 Ctx = Annotated[Context, Depends(get_context)]
 
 
+def edge_secret_matches(sent: str, settings: Settings) -> bool:
+    """Whether a request carries the Worker's secret: the current one, or the previous one while
+    a rotation is under way. Both are compared every time, so timing doesn't say which matched."""
+    accepted = [
+        secret.get_secret_value()
+        for secret in (settings.edge_shared_secret, settings.edge_shared_secret_previous)
+        if secret is not None
+    ]
+    matches = [hmac.compare_digest(sent.encode(), value.encode()) for value in accepted]
+    return any(matches)
+
+
 def client_ip(request: Request, settings: Settings) -> str:
     """Trust a forwarded address only from the Worker, proven by its secret.
 
     X-Forwarded-For is never read: anyone can send it, so it would make every limit by IP optional.
     """
-    secret = settings.edge_shared_secret
-    if secret is not None:
-        sent = request.headers.get(EDGE_SECRET_HEADER, "")
-        if hmac.compare_digest(sent, secret.get_secret_value()):
+    if settings.edge_shared_secret is not None:
+        if edge_secret_matches(request.headers.get(EDGE_SECRET_HEADER, ""), settings):
             forwarded = request.headers.get(EDGE_CLIENT_IP_HEADER)
             if forwarded:
                 return forwarded.strip()[:64]
@@ -369,18 +383,19 @@ class RequestMiddleware:
             message = await receive()
             if message["type"] == "http.request":
                 received["bytes"] += len(message.get("body", b""))
-                # Chunked bodies declare no size, so they're counted as they arrive.
+                # Chunked bodies declare no size, so they're counted as they arrive. Starlette's
+                # own exception, because FastAPI turns any other error while reading a body into
+                # a plain 400, which hid the reason (F-167, found by the penetration test).
                 if received["bytes"] > limit:
-                    raise Problem(413, "body_too_large", "That request is too large")
+                    raise StarletteHTTPException(413)
             return message
 
         response: Response | None = None
-        secret = self.settings.edge_shared_secret
         if (
-            secret is not None
+            self.settings.edge_shared_secret is not None
             and scope["path"] not in EDGE_EXEMPT_PATHS
-            and not hmac.compare_digest(
-                headers.get(EDGE_SECRET_HEADER, b"").decode("latin-1"), secret.get_secret_value()
+            and not edge_secret_matches(
+                headers.get(EDGE_SECRET_HEADER, b"").decode("latin-1"), self.settings
             )
         ):
             response = self._reject(403, "direct_access", "Use the site's address", request_id)
@@ -455,16 +470,36 @@ def install_error_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(StarletteHTTPException)
     async def on_http(request: Request, error: StarletteHTTPException) -> Response:
-        code = {404: "not_found", 405: "method_not_allowed"}.get(error.status_code, "http_error")
-        title = {404: "Not found", 405: "Method not allowed"}.get(error.status_code, "Bad request")
+        code = {404: "not_found", 405: "method_not_allowed", 413: "body_too_large"}.get(
+            error.status_code, "http_error"
+        )
+        title = {
+            404: "Not found",
+            405: "Method not allowed",
+            413: "That request is too large",
+        }.get(error.status_code, "Bad request")
         body = problem_body(error.status_code, code, title, request_id_of(request))
         return respond(request, error.status_code, body, None)
+
+
+def freeze_startup_heap() -> None:
+    """Keep the garbage collector off everything that exists once the API has started.
+
+    A full collection walks every tracked object, about 80,000 once the models and libraries are
+    loaded, which took 22 to 33 ms of CPU. On Render's 0.1 CPU that's a stall of a quarter of a
+    second or more for whatever request is running, and it came round regularly under load (F-162).
+    These objects live as long as the process, so freezing them loses nothing; what requests create
+    afterwards is still collected as usual.
+    """
+    gc.collect()
+    gc.freeze()
 
 
 def load_models(context: Context) -> None:
     """On a background thread: the API must answer /health and serve stored data while this runs."""
     chain = context.chain
     if chain is None:
+        freeze_startup_heap()
         return
     while not context.stop.is_set():
         try:
@@ -472,6 +507,7 @@ def load_models(context: Context) -> None:
             context.metrics.model_ready.set(1)
             context.model_error = None
             logger.info("Models loaded")
+            freeze_startup_heap()
             break
         except (ChainError, OSError, ValueError) as error:
             # A FORCE_MODEL that isn't loaded lands here too, and /ready stays false until fixed.
@@ -534,6 +570,12 @@ def create_app(
         settings.db_pool_size,
         on_statement,
     )
+    # A snapshot's edits change only through a review, which clears these two caches. So the
+    # feed's poll every 3 s needn't reach Postgres each time: at 2 s, one seat left on the feed
+    # all month would read about 10.8 GB from Supabase, past its free 5 GB of egress (F-176).
+    list_ttl = (
+        SNAPSHOT_LIST_TTL_SECONDS if settings.data_mode == "snapshot" else LIVE_LIST_TTL_SECONDS
+    )
     context = Context(
         settings=settings,
         db=db,
@@ -542,12 +584,19 @@ def create_app(
         metrics=metrics,
         chain=chain,
         explainer=(
-            Explainer(db, providers, explain_daily_cap, settings.guest_explain_limit, metrics)
+            Explainer(
+                db,
+                providers,
+                explain_daily_cap,
+                settings.guest_explain_limit,
+                metrics,
+                max_in_flight=settings.explain_max_concurrency,
+            )
             if providers
             else None
         ),
-        queue_cache=TtlCache("queue", 2.0, metrics=metrics),
-        feed_cache=TtlCache("feed", 2.0, metrics=metrics),
+        queue_cache=TtlCache("queue", list_ttl, metrics=metrics),
+        feed_cache=TtlCache("feed", list_ttl, metrics=metrics),
         models_cache=TtlCache("models", 300.0, metrics=metrics),
         health_cache=TtlCache("health", 60.0, metrics=metrics),
         predict_cache=PredictCache(),

@@ -4,6 +4,7 @@ from typing import Any
 
 import pytest
 from archiver import Archiver, clean_up
+from confluent_kafka import KafkaException
 from pydantic import ValidationError
 from wikiguard_core.archive import (
     EDITS,
@@ -57,11 +58,14 @@ class FakeConsumer:
     def __init__(self, messages: list[FakeMessage] | None = None) -> None:
         self.messages = messages or []
         self.commits = 0
+        self.broker_down = False
 
     def poll(self, timeout: float) -> FakeMessage | None:
         return self.messages.pop(0) if self.messages else None
 
     def commit(self, asynchronous: bool = False) -> None:
+        if self.broker_down:
+            raise KafkaException("broker down")
         self.commits += 1
 
 
@@ -144,6 +148,23 @@ def test_a_crash_before_commit_leaves_duplicates_that_readers_remove(tmp_path: P
     run_all(archiver, consumer)
 
     assert sorted(row["rev_id"] for row in read_rows(tmp_path, EDITS)) == [1, 2]
+
+
+def test_a_failed_commit_keeps_the_archiver_running(tmp_path: Path) -> None:
+    """F-161: with Redpanda down, the commit raised and the archiver exited."""
+    consumer = FakeConsumer(messages_for(edit(1), edit(2)))
+    consumer.broker_down = True
+    archiver = Archiver(consumer, tmp_path, flush_rows=2)
+
+    run_all(archiver, consumer)
+    assert consumer.commits == 0
+    assert len(read_rows(tmp_path, EDITS)) == 2
+
+    consumer.broker_down = False
+    consumer.messages = messages_for(edit(3), edit(4))
+    run_all(archiver, consumer)
+    assert consumer.commits == 1
+    assert sorted(row["rev_id"] for row in read_rows(tmp_path, EDITS)) == [1, 2, 3, 4]
 
 
 def test_poison_message_is_skipped_and_the_rest_continue(tmp_path: Path) -> None:

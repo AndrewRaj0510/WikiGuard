@@ -102,8 +102,13 @@ class ApiSettings(BaseConfig):
     # The Worker sends this header. Set it and direct requests are refused, and only then is the
     # Worker's client-IP header believed. Blank in local dev.
     edge_shared_secret: SecretStr | None = None
+    # Also accepted while the edge secret is rotated, so the Worker and the API can change at
+    # different times without 403s for visitors. Blank otherwise (runbooks/secret-rotation.md).
+    edge_shared_secret_previous: SecretStr | None = None
     guest_signin_wait_seconds: int = Field(default=60, ge=0)
     predict_max_concurrency: int = Field(default=2, gt=0)
+    # LLM calls in flight at once for Explain (F-163).
+    explain_max_concurrency: int = Field(default=4, gt=0)
     db_statement_timeout_ms: int = Field(default=3000, gt=0)
     db_pool_size: int = Field(default=5, gt=0)
     # "snapshot" when the database holds a fixed, already-scored dataset (scripts/load_demo.py)

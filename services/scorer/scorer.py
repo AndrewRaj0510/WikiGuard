@@ -9,7 +9,9 @@ What happens to an edit when something goes wrong (section 14 of the plan):
 - Unreadable, or Postgres refuses it: edits.dlq, so it can't block the edits behind it.
 - Every model fails: if a known-good edit still scores, this edit is the problem and goes to the
   DLQ. If that fails too, the models are the problem, so the edit is stored unscored and rescored
-  later.
+  later. Only errors can blame the edit: when a model timed out or had no free slot, that's load,
+  which no edit causes (predictor.py), so the edit is stored unscored however the known-good one
+  does. Failure injection found overload dead-lettering good edits (F-157).
 - Postgres or Redpanda down: nothing is committed, and the batch is retried until it works.
 - Too far behind: switch to the fast models and flag those scores, until the backlog halves.
 """
@@ -60,10 +62,16 @@ from wikiguard_core.kafka import (
     ensure_topics,
 )
 from wikiguard_core.ops import serve_ops
-from wikiguard_core.predictor import AllModelsFailed, Prediction, Predictor
+from wikiguard_core.predictor import AllModelsFailed, Outcome, Prediction, Predictor
 from wikiguard_core.schemas import EditEvent, ScoreRecord
 
 logger = logging.getLogger("scorer")
+
+
+def overloaded(failure: AllModelsFailed) -> bool:
+    """A model timed out or had no free slot. That's load, not a bad edit, so never dead-letter."""
+    return any(attempt.outcome in (Outcome.TIMEOUT, Outcome.BUSY) for attempt in failure.attempts)
+
 
 CONSUMER_GROUP = "scorer"
 POLL_SECONDS = 1.0
@@ -393,7 +401,7 @@ class ScoringWorker:
             try:
                 self._apply([item], predictor.score([item.features]), shed)
             except AllModelsFailed as failure:
-                if self._models_work(predictor):
+                if not overloaded(failure) and self._models_work(predictor):
                     self._dead_letter(REASON_SCORING, item.edit.rev_id, str(failure))
                     continue
                 self.metrics.unscored.inc()

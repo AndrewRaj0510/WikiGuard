@@ -1,11 +1,12 @@
 """Parts of the API with no database, so they run in every CI job."""
 
+import gc
 import json
 import logging
 import threading
 
 import pytest
-from wikiguard_api.app import PredictCache
+from wikiguard_api.app import PredictCache, freeze_startup_heap
 from wikiguard_api.cache import SingleFlight, TtlCache
 from wikiguard_api.foundations import JsonFormatter, Problem, RateLimiter, problem_body
 from wikiguard_api.queries import decode_cursor, encode_cursor, with_link
@@ -244,3 +245,17 @@ def test_links_are_built_from_the_integer() -> None:
     assert with_link({"rev_id": 42})["wikipedia_url"].endswith("diff=42")
     with pytest.raises(ValueError):
         with_link({"rev_id": "1&evil=1"})
+
+
+def test_the_startup_heap_is_frozen_out_of_full_collections() -> None:
+    """F-162: a full collection over the startup objects stalled requests on 0.1 CPU."""
+    try:
+        freeze_startup_heap()
+        assert gc.get_freeze_count() > 0
+        # Garbage made afterwards is still collected.
+        cycle: list[object] = []
+        cycle.append(cycle)
+        del cycle
+        assert gc.collect() >= 1
+    finally:
+        gc.unfreeze()

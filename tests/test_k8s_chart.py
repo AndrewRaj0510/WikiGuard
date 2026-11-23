@@ -270,3 +270,22 @@ def test_kind_runs_no_job_that_needs_the_owners_keys() -> None:
     }
     assert suspended == {"wikiguard-purge-snapshots", "wikiguard-purge-snapshots-full"}
     assert "initContainers" not in trainer_job(KIND)["spec"]["template"]["spec"]
+
+
+def test_every_alert_names_a_runbook() -> None:
+    """An alert that fires at 3 a.m. should say what to do. The runbooks live in docs/, which is
+    kept out of git, so where it exists (the owner's machine) each named file must exist too."""
+    rules = [
+        rule
+        for doc in PROD
+        if doc and doc.get("kind") == "PrometheusRule"
+        for group in doc["spec"]["groups"]
+        for rule in group["rules"]
+        if "alert" in rule
+    ]
+    assert rules
+    for rule in rules:
+        runbook = rule.get("annotations", {}).get("runbook", "")
+        assert runbook.startswith("docs/runbooks/"), rule["alert"]
+        if (ROOT / "docs/runbooks").is_dir():
+            assert (ROOT / runbook).is_file(), (rule["alert"], runbook)
