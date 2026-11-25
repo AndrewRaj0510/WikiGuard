@@ -34,7 +34,9 @@ def test_the_env_file_is_readable_only_by_its_owner(tmp_path: Path) -> None:
 def test_a_file_already_there_is_narrowed_too(tmp_path: Path) -> None:
     path = tmp_path / "user_password.txt"
     path.write_text("old", "utf-8")
-    os.chmod(path, 0o644)
+    # Wider than 0600 but still owner-only, so code scanning has nothing to flag. O_CREAT's mode
+    # alone would leave it at 0700, so this still fails if write_private stops narrowing.
+    os.chmod(path, 0o700)
     compose_e2e.write_private(path, "new")
     assert mode(path) == 0o600
     assert path.read_text("utf-8") == "new"

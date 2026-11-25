@@ -12,9 +12,11 @@ WikiGuard is a real-time platform that watches every edit made to English Wikipe
 ![Next.js 16](https://img.shields.io/badge/Next.js-16-000000?logo=nextdotjs&logoColor=white)
 ![Cost: $0](https://img.shields.io/badge/infrastructure-free%20tiers-2ea44f)
 
-[Live site](https://wiki-guard.vercel.app) · [Architecture](#architecture) · [Models](#models) · [Project status](#project-status) · [Development](#development)
+[Live site](https://wiki-guard.vercel.app) · [Results](#results-at-a-glance) · [Architecture](#architecture) · [Models](#models) · [Retraining](#the-retraining-story) · [Security](#security) · [Known limits](#known-limits) · [Development](#development)
 
 </div>
+
+> **About the live site.** [wiki-guard.vercel.app](https://wiki-guard.vercel.app) serves the landing and privacy pages. The console (queue, feed, models, health) needs the API on Render and the Cloudflare Worker, which aren't deployed yet, so for now it says it can't connect. Once they are, it serves a scored snapshot of real edits and says so on every page. It never shows live data ([why](#project-status)).
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="frontend/public/screenshots/queue-dark.webp">
@@ -45,6 +47,26 @@ WikiGuard is a portfolio project, built the way a production machine learning sy
 - **A web app built for untrusted text.** Edits can contain anything, so the Next.js frontend shows them only as plain text, under a strict content security policy, and is tested against a set of XSS attacks and for accessibility (WCAG 2.1 AA). The FastAPI backend checks the user's role on every request.
 - **Real operations.** CI/CD on GitHub Actions with hash-locked dependencies and scanned images, a Helm chart run on Kubernetes (kind) with Pod Security and default-deny networking, and Prometheus, Grafana, and Alertmanager for monitoring.
 - **Free to run.** Everything runs on free tiers. The only paid part is a small prepaid balance of OpenAI credits for the Explain button.
+
+## Results at a glance
+
+Every number below was measured. Where it was measured matters, so it's in the last column: nothing behind the frontend is deployed, so the service numbers come from the real images on a laptop, at Render's free-plan limits (0.1 CPU, 512 MB).
+
+| What | Result | Where measured |
+|---|---|---|
+| Champion model | RoBERTa-base, test PR-AUC **0.364** (95% interval 0.339 to 0.387), against 0.187 for a rule baseline. **48 of the 50** riskiest edits were really reverted | Held-out newest week, 25,302 edits |
+| Edit to score | p95 **19.0 s** against a 60 s target | Live Wikimedia stream, Kubernetes (kind) on the laptop |
+| Stream at 5× the real rate | 3,726 of 3,726 edits scored, p95 **0.7 s**, no backlog | Replay of real edits, Docker Compose |
+| Read endpoints | p95 **17.5 ms** normal, **20.5 ms** at 10×, against 200 ms | k6 at Render's limits |
+| `/predict` with RoBERTa | p95 2.4 to 3.9 s against 300 ms: **missed** (see [Known limits](#known-limits)) | k6 at Render's limits |
+| Retraining loop | Drift found → retrained → gate passed → shadow → promoted: PR-AUC **+0.012** (+0.008 to +0.018). Poisoned labels **rejected** before training. A bad model **rolled back** by the daily check | Replays on real edits in a sandbox |
+| Failure injection | **10 of 10** failure scenarios behave as designed, after 6 fixes the tests found | Docker Compose, end to end |
+| Penetration test | **29 of 30** attacks held (OWASP API and LLM Top 10); 1 open finding, 2 couldn't run locally | The demo's images behind the real Worker code |
+| Secret rotation | Every secret the API holds rotated in 115 s, **0** visitors refused | Same |
+| Leaked password incident | Contained **44 s** after it was found, recovered at 146 s | Same |
+| Database restore | Demo database rebuilt from a backup in **22 to 27 s**, every table identical | Fresh local Postgres |
+| Leaks | **0** secrets, tokens, usernames, or diff text in 1,107 log lines or 251 browser responses | Whole pipeline, and Chromium |
+| Cost | **$0** apart from OpenAI credits; the single seat keeps the worst case inside every free limit | Usage per visitor, measured |
 
 ## Architecture
 
@@ -77,7 +99,34 @@ Every change to what serves goes one way: the monitor, or the owner's button in 
   <img alt="The continuous-training loop: an edit is scored and queued, the community reverts or keeps it, and its label is final at 48 hours. A daily monitor computes live metrics and drift. Drift, decay, or the schedule start a retrain. The promotion gate uses a paired bootstrap, the golden set, and slices: if it fails the champion stays, and if it passes the candidate scores live edits in shadow, then is promoted. A post-promotion check rolls back automatically if it is worse live." src="docs/images/readme/training_loop_light_2026-11-11.svg">
 </picture>
 
-Retraining runs every `RETRAIN_INTERVAL_DAYS` days (7 by default, 1 or 14 as options), and sooner on drift or falling live accuracy. The gate rejected a label-poisoning replay and promoted a better model in a drift replay (see [Project status](#project-status)).
+Retraining runs every `RETRAIN_INTERVAL_DAYS` days (7 by default, 1 or 14 as options), and sooner on drift or falling live accuracy. Only the trainer moves registry aliases; the monitor and the owner's button just add a request.
+
+## The retraining story
+
+A model that learns from reverts has to keep learning, because vandalism changes. The loop above was run end to end three times, each as a replay on the real backfilled edits, with the real code, in a sandbox registry and database. Nothing was deployed, so no retrain has run on live traffic. The sandbox chain was the BiLSTM as champion and the MLP as fallback, the two models that retrain on a CPU in a reasonable time. The transformers retrain from a GPU notebook.
+
+**1. Drift leads to a better model.** A synthetic spam campaign was planted in 6,517 edits over the last 20 days: a link to a made-up domain, from logged-out editors, labeled reverted. The daily monitor found text drift and drift in `uppercase_ratio` (1 of 9 comparable features over its threshold), and asked for a retrain with the reason "text drift found".
+
+![Each feature's drift against its own threshold, on a log scale. uppercase_ratio is past the threshold; the other eight features are below it.](docs/images/readme/monitor_drift_2026-11-04.png)
+
+The poller started the trainer, which built a fresh snapshot (94,819 rows), checked it, retrained both models, and ran the promotion gate. The gate compares the candidate with the champion on the same newest window, with a paired bootstrap, and also checks the golden set (200 frozen edits), each slice, latency, and size. Every check passed. The candidate then scored the newest day in shadow (3,613 edits, 0 errors) and was promoted.
+
+![Before vs after on the newest test window: overall PR-AUC 0.866 before and 0.879 after; logged-out editors 0.953 to 0.965; registered editors 0.087 to 0.082; small edits 0.337 to 0.364; large edits 0.969 to 0.970.](docs/images/readme/report_before_after_sim_drift_2026-11-04.png)
+
+| Measure | Before (BiLSTM v1) | After (BiLSTM v4) |
+|---|---|---|
+| PR-AUC, newest window | 0.866 (0.856 to 0.877) | 0.879 (0.870 to 0.887) |
+| Paired difference | | **+0.0123** (+0.0075 to +0.0175) |
+| False positive rate, logged-out editors | 0.379 | 0.114 |
+| False positive rate, registered editors | 0.0072 | 0.0005 |
+| Golden set PR-AUC | 0.7949 | 0.7912, inside the 0.02 allowed drop |
+| p95 latency, size | | 15.2 ms, 4.3 MB |
+
+These numbers show the loop working, not model quality: the planted campaign makes the task easy, so they can't be compared with the leaderboard. Registered editors' PR-AUC fell by 0.0046, which is inside the gate's allowance for a slice.
+
+**2. Poisoned labels are refused.** 2,035 edits on one day were relabeled as reverted, a coordinated burst of fake reverts. The trainer's data checks refused the snapshot (that day's revert rate was 63.5%, over twice the mean) 72 s after the request. Nothing trained, no alias moved, and an alert went out. The limit: this check sees a burst, not poisoning spread thinly over many days.
+
+**3. A bad model is rolled back.** A BiLSTM trained on shuffled labels was forced into the champion slot. The next daily check measured its live PR-AUC at 0.059 on 25,319 labels, against 0.320 for the model it replaced, and asked for a rollback. The aliases were back in under 0.05 s, and the scorer swapped its chain back in 0.1 s. On a cluster, the worst case is 195 s plus downloading the champion, because the scorer checks the aliases every 60 s; that wasn't timed on a running cluster.
 
 ## Models
 
@@ -101,6 +150,14 @@ PR-AUC is the main measure, because only about 6% of edits are reverted. BERT sc
 
 ![Precision against recall for all five models. The models differ most at low recall, where RoBERTa and BERT keep the highest precision, and they converge beyond about 50% recall.](docs/images/readme/eval_pr_curves_all_2026-11-07.png)
 
+**Calibration.** The score is shown to patrollers as a chance of being reverted, so it should mean that. Temperature scaling, fitted on the validation week, brought RoBERTa's expected calibration error on the test week from 0.027 to 0.016.
+
+![RoBERTa's reliability diagram on the test week: share reverted against mean score in each bin, before and after temperature scaling (T = 1.29), next to the line of perfect calibration. ECE 0.027 before, 0.016 after.](docs/images/readme/eval_reliability_roberta_2026-11-07.png)
+
+**Disguised text.** Vandals write around filters with leetspeak, look-alike letters, zero-width characters, spacing, and case. Text is normalized before every model sees it, which removes zero-width characters entirely. The other tricks still cost each model some PR-AUC on 500 reverted and 500 good edits; RoBERTa loses the most, up to 0.045 with spaced-out letters.
+
+![PR-AUC lost by each of the five models to five kinds of disguised text. Zero-width characters cost nothing. RoBERTa loses the most on every other kind, up to 0.045 for spacing.](docs/images/readme/eval_robustness_all_2026-11-07.png)
+
 ## Data
 
 - **Source:** Wikimedia's `recentchange` stream for live edits, and the MediaWiki Action API for diffs, tags, and a 30-day backfill. Scope: English Wikipedia, article namespace, edits only, no bots.
@@ -115,6 +172,8 @@ The backfill collected 100,566 edits over 28 days. 6.21% were reverted within 48
 | Train | up to Oct 19, 2026 | 44,411 | 6.67% |
 | Validation | Oct 19 to 26 | 25,318 | 6.30% |
 | Test | Oct 26 to Nov 2 | 25,302 | 5.89% |
+
+![The share of edits reverted within 48 hours, for each day from October 6 to November 2, 2026, between 4.7% and 7.6%, with the train, validation, and test windows shaded in time order.](docs/images/readme/snapshot_splits_by_day_2026-11-06.png)
 
 These are the rows the models were trained and measured on. A snapshot can shrink after that, because rows Wikipedia has since removed are taken out before each push. The published copy has 12 fewer, none of them reverted, and its manifest records each removal and the previous hash.
 
@@ -135,6 +194,111 @@ The demo allows one person at a time, in one tab, which keeps it within free lim
 
 Keyboard flow: `j`/`k` to move, Enter to open, `v`/`g`/`o`/`s` to review, `n`/`p` for the next or previous edit, `e` for Explain, and `?` for help.
 
+## Operations and reliability
+
+The cluster half ran for hours on Kubernetes (kind) on the laptop against the live Wikimedia stream, with Prometheus, Grafana, and Alertmanager. Grafana stays private, so the app draws its own charts from the API, and the dashboards are shared as screenshots.
+
+![The Grafana Models dashboard from the kind run, three hours: edits scored per minute by model (RoBERTa about 62, DistilBERT about 9), the fallback rate near 10% against a 5% line, batch latency p95 of 280 ms for RoBERTa and 575 ms for DistilBERT, no circuit breakers open, and no shadow candidate loaded.](docs/images/readme/grafana_models_2026-11-12.png)
+
+On kind, 74.5 edits a minute arrived from the live stream and were scored with a p95 of 19.0 s from the edit's time on Wikipedia. About 10% were answered by DistilBERT, because RoBERTa missed the scorer's 300 ms limit for one edit on the laptop. That is what the fallback chain is for.
+
+**Failure injection.** Each row of the failure table was broken on purpose on the full Docker Compose stack (every real image, the real five models, and a mock Wikimedia with switches), with a browser watching the app. All 10 behave as designed, after six fixes the runs found; one of them is that a broken champion used to be invisible, because its fallback answers weren't flagged.
+
+| Failure | What happened |
+|---|---|
+| Wikimedia stream down, 11.5 min | 29 reconnect tries with jittered backoff; "Stale" banner after 9.6 minutes; resumed from the last event, the gap scored 39 s later, no duplicates |
+| Rate limits (429, `maxlag`) | Every `Retry-After` honored to within 0.05 s |
+| Redpanda down | Services stayed up; all edits scored 48 s after it returned, no duplicates |
+| Champion's file damaged | API ready in 6.3 s without it; answers come from the fallback and say so |
+| Every model fails | `/predict` answers 503; the scorer stops, so edits wait in Redpanda instead of being stored unscored |
+| Postgres down | Reads served stale with a banner until the session's 45 s lease ran out; scorer caught up 9.5 s after it returned |
+| Model registry down | API and scorer start from the saved chain in 4.2 s |
+| LLM down or over its daily cap | "Explanation unavailable"; the rest of the app unaffected |
+| API asleep or down | Waking screen within 3.3 s; back without a reload |
+| Cluster down | API and frontend keep serving stored data with a freshness banner |
+
+![The screen the app shows while the API isn't answering: "WikiGuard isn't answering. It may be waking up, which can take a minute on the free plan. Still trying every few seconds." with a progress bar and a Try now button.](docs/images/readme/failure_api_down_1_2026-11-21.png)
+
+## Service levels and load tests
+
+Load tests ran with k6 against the API image at Render's free-plan limits (0.1 CPU, 512 MB) over the demo's 25,294 edits, with local Postgres, so Supabase's network time isn't included. The app allows one person at a time, so "load" means that person at the app's own limits, plus everyone else being turned away.
+
+| Objective | Target | Measured | Met? |
+|---|---|---|---|
+| Edit to score | p95 ≤ 60 s | 19.0 s on the live stream (kind); 0.7 s replaying at 5× the real rate | Yes |
+| Read endpoints | p95 ≤ 200 ms | 17.5 ms normal, 20.5 ms at 10×, paced like the frontend. Worst case, every poll on one clock: 295 and 188 ms | Yes, for real traffic |
+| `/predict`, awake | p95 ≤ 300 ms | 2.4 to 3.9 s with RoBERTa answering (median about 380 ms). 183 to 435 ms with a 300 ms limit, but then the MLP answers 92% | No |
+| Cold start | ≤ 90 s | 41.3 s to ready | Yes, in Docker; not on Render |
+| Model rollback | < 5 min | 0.05 s to restore the aliases, 0.1 s to swap the chain (sandbox); 195 s plus a download worst case on a cluster | Yes in the sandbox; not timed on a cluster |
+| Database restore | ≤ 4 h | 21.7 and 27.3 s for the demo's database | Yes, locally; not on Supabase |
+| Ingestion uptime | ≥ 99% over 30 days | not measured: nothing runs around the clock | |
+
+| Load test | Result |
+|---|---|
+| Normal reads, 5 minutes | p95 17.5 ms, p99 784 ms (the first polls of a page load arrive together) |
+| 10× spike, 5 minutes | p95 20.5 ms, p99 95 ms; every extra visitor turned away by the seat, cheaply |
+| One-hour soak | 2,657 requests, 0 failed checks, memory 263 → 240 MiB, latency flat |
+| Explain burst, 30 edits at once | At most 4 LLM calls in flight, the rest answered "busy" at once; 20 requests for one edit made 1 LLM call |
+| `/predict` at twice the owner's limit | Refused as designed: 429 from the rate limiter, 503 from the 2 slots |
+| Stream replay at 5× (6.2 edits a second, 10 minutes) | All 3,726 scored; p50 0.2 s, p95 0.7 s, max 1.3 s; 1.7% by the fallback |
+
+What the tests changed, measured before and after:
+
+| Change | Before | After |
+|---|---|---|
+| `gc.freeze()` after startup, so a full garbage collection no longer walks the loaded models' objects | Reads p95 554 ms, p99 974 ms | 295 ms, 302 ms |
+| At most 4 Explain LLM calls at once | 23 calls in flight in a 30-edit burst; feed p95 1,788 ms | 4 in flight; feed p95 1,472 ms |
+| Lists cached 5 minutes in snapshot mode, cleared by any review | One seat on the feed for a month: about 10.8 GB from Supabase, against 5 GB free | About 1.2 GB |
+
+## Security
+
+Edits are written by anyone, including attackers, so every diff, title, comment, and username is treated as hostile, and so is the LLM's answer about them.
+
+- **Text renders as text.** React text nodes only, under a nonce-based content security policy with no `unsafe-inline`. An LLM answer with markup or a link is refused, not shown.
+- **Prompt injection.** The diff goes to the LLM as escaped data inside tags it can't close; the model has no tools, and its answer is checked before it's stored.
+- **Access.** Two fixed accounts, `guest` and `user`, checked on the server for every request; one session in one tab across the whole app; CSRF tokens; Argon2 password hashing with lockouts per address and overall; an `HttpOnly` session cookie and nothing in browser storage.
+- **Edge.** The API refuses anything that didn't come through the Cloudflare Worker, which also replaces any client-supplied address headers.
+- **Data.** Supabase's Data API off, row-level security on every table, a least-privilege login per service, no editor IPs stored, editors kept as a keyed hash.
+- **Supply chain.** Hash-locked Python installs, GitHub Actions pinned to commits, base images pinned by digest, CodeQL, Trivy, `pip-audit`, `npm audit`, gitleaks, and Dependabot. No pickled model files; checksums verified before loading.
+- **Cluster.** Pod Security `restricted` on every pod, default-deny NetworkPolicies in both directions (13 of 13 connections allowed or refused as expected), one Secret per component, Sealed Secrets, nothing exposed. kubescape: 26 of 30 controls passed, the other 4 explained.
+
+**Penetration test.** A script attacked the demo as it will be deployed: the API image at Render's limits on the demo's data, the built frontend, and the real Worker's code in front, with a fake LLM that could be told to answer with an attack. 32 attacks against the OWASP API Security Top 10 and the LLM Top 10:
+
+| Area | Result |
+|---|---|
+| Calling the API around the Worker, spoofed address headers | Held: 403, and the Worker replaced every spoofed header |
+| 14 console routes with no session; forged and reused cookies; missing CSRF tokens | Held: 401 and 403 |
+| Password brute force, one address and many | Held: locked after 5 tries; 12 at once ran one hash check |
+| A guest calling the 6 owner-only routes | Held: 403 |
+| Oversized, malformed, and hostile input (11 kinds) | Held: never a 500, never a stack trace or SQL in a response. One fix: a streamed oversized body got 400 instead of 413 |
+| Stored XSS: 6 payloads in a title, summary, and diff, in Chromium | Held: nothing ran, no CSP violation, every payload shown as text |
+| Prompt injection and a hostile LLM answer | Held: escaped, and the answer refused |
+| Using up the LLM budget | Held: guests get 5, the owner 10 a minute, and the daily cap stopped it at exactly 40 calls |
+| A bot with two addresses taking turns in the guest seat | **Failed:** visitors were kept out (the owner can still take over). Open, see [Known limits](#known-limits) |
+| Reading Supabase through its REST API; server-side request forgery | Not run: needs the real project; no route takes a URL |
+
+![An edit page during the penetration test, through the Worker: the title, summary, and diff hold script tags, an img onerror, an svg onload, an iframe, and javascript: links, and every one of them shows as plain text.](docs/images/readme/pentest_xss_edit_2026-11-23.png)
+
+The page above shows one of the two edits the test added to the demo's data, which is why the banner counts 25,296.
+
+**Rehearsed.** A scheduled rotation of every secret the API holds took 115 s and refused no visitor, thanks to a short overlap for the Worker's secret. A leaked owner password was contained 44 s after it was found (read-only mode, everyone signed out, new password) and fully recovered at 146 s. Logs from the whole pipeline (1,107 lines) and every browser response held no secret, token, username, or diff text, including a frontend built with seven secrets in its environment.
+
+## Known limits
+
+Said plainly, so this README doesn't claim more than it should.
+
+- **The demo isn't live, and isn't deployed yet.** No free host can run the streaming pipeline around the clock, so the public demo serves a fixed snapshot of real edits with their real labels, and says so on every page. The pipeline runs on Kubernetes on the laptop only. The API on Render, the Worker, and the demo's database on Supabase are built and tested locally and wait on my accounts.
+- **`/predict` misses its 300 ms target** with RoBERTa on Render's tenth of a CPU (p95 2.4 to 3.9 s). A 300 ms limit meets it, but then the much weaker MLP answers most requests. Which one the demo serves is still to decide.
+- **A bot with two IP addresses can hold the guest seat**, keeping visitors out. The owner can always take over. The options (a challenge, a waiting line, or accepting it) are written down; none is built.
+- **No live model health yet.** Live PR-AUC, drift, and label lag are computed by the monitor, but have never run on live traffic. The retraining loop ran as replays, with the BiLSTM and MLP; the transformers retrain by hand from a GPU notebook.
+- **The poisoning check sees bursts,** not poisoning spread thinly over many days.
+- **BERT serves behind DistilBERT and the BiLSTM**, though it scores second, because its quantized file doesn't match the original closely enough to trust the tests.
+- **An outage of the model registry in the middle of a retrain loses the run,** and sustained rate limiting from Wikimedia sends edits to the dead-letter queue instead of waiting.
+- **Nothing outside watches or backs up the demo** yet: no uptime check on the API, and the backup job is a cluster CronJob, which isn't deployed.
+- **Explain hasn't been scored on a real LLM.** The faithfulness and prompt-injection test sets exist; running them spends credits and is still to do.
+- **Never run on ARM or on the Oracle VM.** The images are built for arm64 and the VM scripts are written, but Oracle never had free capacity.
+- **Labels are reverts, not vandalism.** A high score means "a person should look at this".
+
 ## Tech stack
 
 Everything runs on free tiers except OpenAI API credits for Explain. When a limit is reached, the app degrades rather than billing.
@@ -147,7 +311,7 @@ Everything runs on free tiers except OpenAI API credits for Explain. When a limi
 | Monitoring | Evidently, Prometheus, Grafana, and Alertmanager |
 | Streaming | Redpanda (Kafka API), self-hosted |
 | Database | Postgres on Supabase, with row-level security on every table |
-| Archive | Parquet on the cluster's disk, mirrored nightly to Oracle Object Storage |
+| Archive | Parquet on the cluster's disk, with a nightly mirror to S3-compatible storage (built for Oracle Object Storage; on the laptop it stays on a volume) |
 | API | FastAPI on Render |
 | Frontend | Next.js 16, React 19, Tailwind CSS 4, on Vercel |
 | Edge | Cloudflare Worker |
@@ -168,10 +332,10 @@ The project is built phase by phase. Model results are from a held-out test wind
 | 3 | Serving, API, and Explain | Built and tested locally. Not deployed, and Explain not yet measured on a real LLM |
 | 4 | Frontend | Done. Live on Vercel at [wiki-guard.vercel.app](https://wiki-guard.vercel.app); the console connects once the API is on Render (Phase 7) |
 | 5 | Monitoring and continuous training | Built and tested locally. Drift-to-promotion and label poisoning replayed on real data in a sandbox; the rollback replay ran in Phase 8; anything live is still to run |
-| 6 | CI/CD and security | Built and tested locally: full CI, hash-locked installs, multi-arch image pipeline, threat model. The workflows first run on GitHub when this is pushed; staging and deploys wait for Phase 7 |
+| 6 | CI/CD and security | Done: full CI on GitHub, hash-locked installs, multi-arch image pipeline, CodeQL, threat model. The deploy half of CD and staging stay switched off until the API is on Render |
 | 7 | Kubernetes and deployment | Built and run on a local cluster (kind) against the live Wikimedia stream: Helm chart, Pod Security, default-deny networking, Prometheus alerts, Grafana dashboards, encrypted backups with a timed restore. The VM was dropped, so the cluster isn't deployed. The demo's data and its "snapshot, not live" label are built; Render and the Cloudflare Worker wait on my accounts |
-| 8 | Production hardening | Done, locally (nothing behind the frontend is deployed). Failure injection done: every row of the failure table broken on the real stack (locally, on Compose), and six problems it found fixed. Load tests done with k6 at Render's limits: reads and the stream meet their SLOs, `/predict` doesn't with RoBERTa on 0.1 CPU (p95 2.4 to 3.9 s against 300 ms). Self-penetration test done against the OWASP API and LLM Top 10 through the real Worker's code: 29 of 30 attacks held, one fix; a bot can hold the guest seat (open). Rehearsed locally: a rotation of every secret the API holds with no visitor refused, a leaked-password incident contained in 44 s, the demo's database rebuilt from a backup in under 30 s, and a model rollback; no secret, token, username, or diff text in any service's log or anywhere a browser can read. Every alert has a runbook; what a visitor costs each free tier is measured, and the single seat keeps the worst case inside every limit ($0 apart from OpenAI credits); the deploy checklist runs locally. The 7-day unattended run was dropped (DEC-091) |
-| 9 | Polish and demo | Not started |
+| 8 | Production hardening | Done, locally (nothing behind the frontend is deployed): failure injection, load tests, a self-penetration test, secret rotation, incident, rollback, and restore rehearsals, a log and browser leak check, a runbook for every alert, and cost per visitor. Results are in [Operations](#operations-and-reliability), [Service levels](#service-levels-and-load-tests), and [Security](#security). The 7-day unattended run was dropped with the VM |
+| 9 | Polish and demo | README done: results, retraining story, load tests, security, and known limits. The 2-minute demo video is next |
 
 ## Repository layout
 
@@ -513,7 +677,7 @@ The single site address is a Cloudflare Worker ([edge/](edge/)): `/api` goes to 
 
 ## Design notes
 
-The design notes are kept locally and aren't in this repo: the full plan and task list, a step-by-step walkthrough, the threat model and privacy record, 90 recorded decisions with the alternatives rejected, findings with their evidence, the evaluation method, and every measured result. Only the images this README uses are tracked, in `docs/images/readme/`.
+The design notes are kept locally and aren't in this repo: the full plan and task list, a step-by-step walkthrough, the threat model and privacy record, 96 recorded decisions with the alternatives rejected, findings with their evidence, the evaluation method, and every measured result. Only the images this README uses are tracked, in `docs/images/readme/`.
 
 ## Data and attribution
 

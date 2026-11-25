@@ -123,6 +123,9 @@ tested images the version name and publishes these notes.
   reaches serving within 5 minutes.
 - The API freezes its startup objects out of garbage collection once its models have loaded.
   A full collection had stalled requests for a quarter of a second at a time on 0.1 CPU.
+- The README leads with measured results, each with where it was measured, and adds the
+  retraining story, service levels and load tests, failure injection, a security summary with
+  the penetration test, and known limits, with eight more charts and screenshots.
 
 ### Fixed
 - Every Dependabot frontend pull request failed `npm ci`: Dependabot writes lock files with npm
@@ -150,6 +153,8 @@ tested images the version name and publishes these notes.
   these rules.
 - CD's jobs that check out the tested commit also require it to come from this repository, and
   the end-to-end stacks' throwaway credentials are written owner-only. Both from code scanning.
+- The load test's fake LLM refuses TLS 1.0 and 1.1, and Redpanda is 26.2.7 in both Compose and
+  the chart. From code scanning and Dependabot (F-177).
 
 ## [0.5.0] - 2026-11-11
 

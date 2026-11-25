@@ -92,6 +92,8 @@ class Handler(BaseHTTPRequestHandler):
 def serve_tls() -> None:
     server = ThreadingHTTPServer(("0.0.0.0", 443), Handler)  # noqa: S104 - in a container
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    # Refuse TLS 1.0 and 1.1 even in a test fake: the API's client never needs them (code scanning).
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
     context.load_cert_chain(f"{CERT_DIR}/cert.pem", f"{CERT_DIR}/key.pem")
     server.socket = context.wrap_socket(server.socket, server_side=True)
     server.serve_forever()
